@@ -1,7 +1,7 @@
 'use client';
 
 import { RecipeWithLogs } from '@/types';
-import { Card, Badge, StarRating } from './ui';
+import { Card, Badge, StarRating, useTextDirection } from './ui';
 import { Clock, Users, Calendar, ChefHat } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import Image from 'next/image';
@@ -13,6 +13,7 @@ interface RecipeCardProps {
 
 export function RecipeCard({ recipe }: RecipeCardProps) {
   const totalTime = (recipe.prep_time || 0) + (recipe.cook_time || 0);
+  const { isRTL } = useTextDirection(recipe.title);
 
   return (
     <Link href={`/recipe/${recipe.id}`}>
@@ -45,7 +46,10 @@ export function RecipeCard({ recipe }: RecipeCardProps) {
 
         {/* Content */}
         <div className="flex-1 p-4 flex flex-col">
-          <h3 className="font-bold text-lg text-gray-800 line-clamp-2 mb-2">
+          <h3
+            className={`font-bold text-lg text-gray-800 line-clamp-2 mb-2 ${isRTL ? 'text-right' : ''}`}
+            dir={isRTL ? 'rtl' : 'ltr'}
+          >
             {recipe.title}
           </h3>
 

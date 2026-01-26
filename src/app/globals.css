@@ -131,3 +131,77 @@ html {
     padding-bottom: max(0px, env(safe-area-inset-bottom));
   }
 }
+
+/* RTL Support */
+.dir-rtl {
+  direction: rtl;
+  text-align: right;
+}
+
+.dir-ltr {
+  direction: ltr;
+  text-align: left;
+}
+
+.dir-auto {
+  direction: auto;
+}
+
+/* Auto-detect RTL for specific elements */
+[dir="rtl"],
+.rtl {
+  direction: rtl;
+  text-align: right;
+}
+
+/* RTL-aware flex utilities */
+.rtl .flex-row {
+  flex-direction: row-reverse;
+}
+
+/* RTL-aware margins and paddings */
+.rtl .ml-auto {
+  margin-left: 0;
+  margin-right: auto;
+}
+
+.rtl .mr-auto {
+  margin-right: 0;
+  margin-left: auto;
+}
+
+/* Recipe content with auto RTL detection */
+.recipe-content {
+  unicode-bidi: plaintext;
+}
+
+.recipe-content p,
+.recipe-content li,
+.recipe-content h1,
+.recipe-content h2,
+.recipe-content h3 {
+  unicode-bidi: plaintext;
+  direction: auto;
+}
+
+/* Ingredient and instruction lists */
+.ingredient-item,
+.instruction-item {
+  unicode-bidi: plaintext;
+  direction: auto;
+  text-align: start;
+}
+
+/* Input fields auto RTL */
+input[type="text"],
+textarea {
+  direction: auto;
+  unicode-bidi: plaintext;
+}
+
+/* Hebrew-specific styling */
+.hebrew-text {
+  font-family: 'Segoe UI', 'Arial Hebrew', Arial, sans-serif;
+  direction: rtl;
+  text-align: right;
+}

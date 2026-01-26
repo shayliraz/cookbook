@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { useCookingStore } from '@/lib/store';
-import { Button, Badge, StarRating, Card } from '@/components/ui';
+import { Button, Badge, StarRating, Card, useTextDirection } from '@/components/ui';
 import { CookingLogModal } from '@/components/CookingLogModal';
 import {
   ArrowLeft,
@@ -11,16 +11,16 @@ import {
   ExternalLink,
   ChefHat,
   Calendar,
-  Edit3,
   Trash2,
   Share2,
   Plus,
   Camera,
 } from 'lucide-react';
 import { useState } from 'react';
-import { formatDistanceToNow, format } from 'date-fns';
+import { format } from 'date-fns';
 import Image from 'next/image';
 import Link from 'next/link';
+import { containsRTL } from '@/lib/rtl';
 
 export default function RecipePage() {
   const params = useParams();
@@ -48,6 +48,12 @@ export default function RecipePage() {
   }
 
   const totalTime = (recipe.prep_time || 0) + (recipe.cook_time || 0);
+
+  // Check if content is RTL (Hebrew/Arabic)
+  const titleIsRTL = containsRTL(recipe.title);
+  const hasRTLContent = titleIsRTL ||
+    recipe.ingredients.some(i => containsRTL(i)) ||
+    recipe.instructions.some(i => containsRTL(i));
 
   const handleDelete = () => {
     if (confirm('Are you sure you want to delete this recipe? This cannot be undone.')) {
@@ -121,7 +127,12 @@ export default function RecipePage() {
             {/* Title and Rating */}
             <div className="flex items-start justify-between mb-4">
               <div className="flex-1">
-                <h1 className="text-2xl font-bold text-gray-800 mb-2">{recipe.title}</h1>
+                <h1
+                  className={`text-2xl font-bold text-gray-800 mb-2 ${titleIsRTL ? 'text-right' : ''}`}
+                  dir={titleIsRTL ? 'rtl' : 'ltr'}
+                >
+                  {recipe.title}
+                </h1>
                 {recipe.average_rating && (
                   <div className="flex items-center gap-2">
                     <StarRating rating={recipe.average_rating} size="md" readonly />
@@ -225,26 +236,40 @@ export default function RecipePage() {
             </div>
           </div>
 
-          <div className="p-6">
+          <div className={`p-6 ${hasRTLContent ? 'text-right' : ''}`} dir={hasRTLContent ? 'rtl' : 'ltr'}>
             {activeTab === 'ingredients' ? (
               <ul className="space-y-3">
-                {recipe.ingredients.map((ingredient, index) => (
-                  <li key={index} className="flex items-start gap-3">
-                    <span className="flex-shrink-0 w-2 h-2 mt-2 bg-orange-400 rounded-full" />
-                    <span className="text-gray-700">{ingredient}</span>
-                  </li>
-                ))}
+                {recipe.ingredients.map((ingredient, index) => {
+                  const ingredientIsRTL = containsRTL(ingredient);
+                  return (
+                    <li
+                      key={index}
+                      className={`flex items-start gap-3 ingredient-item ${ingredientIsRTL ? 'flex-row-reverse' : ''}`}
+                      dir={ingredientIsRTL ? 'rtl' : 'ltr'}
+                    >
+                      <span className="flex-shrink-0 w-2 h-2 mt-2 bg-orange-400 rounded-full" />
+                      <span className="text-gray-700">{ingredient}</span>
+                    </li>
+                  );
+                })}
               </ul>
             ) : (
               <ol className="space-y-4">
-                {recipe.instructions.map((instruction, index) => (
-                  <li key={index} className="flex gap-4">
-                    <span className="flex-shrink-0 w-8 h-8 bg-orange-100 text-orange-600 font-bold rounded-full flex items-center justify-center">
-                      {index + 1}
-                    </span>
-                    <p className="text-gray-700 pt-1">{instruction}</p>
-                  </li>
-                ))}
+                {recipe.instructions.map((instruction, index) => {
+                  const instructionIsRTL = containsRTL(instruction);
+                  return (
+                    <li
+                      key={index}
+                      className={`flex gap-4 instruction-item ${instructionIsRTL ? 'flex-row-reverse' : ''}`}
+                      dir={instructionIsRTL ? 'rtl' : 'ltr'}
+                    >
+                      <span className="flex-shrink-0 w-8 h-8 bg-orange-100 text-orange-600 font-bold rounded-full flex items-center justify-center">
+                        {index + 1}
+                      </span>
+                      <p className="text-gray-700 pt-1">{instruction}</p>
+                    </li>
+                  );
+                })}
               </ol>
             )}
           </div>

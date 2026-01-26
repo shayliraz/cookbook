@@ -56,7 +56,20 @@ export interface ScrapedRecipe {
   instructions: string[];
   prep_time: number | null;
   cook_time: number | null;
+  total_time: number | null;
   servings: number | null;
+  cuisine: string | null;
+  category: string | null;
+  tags: string[];
+  author: string | null;
+  source_name: string | null;
+  nutrition: {
+    calories?: string;
+    protein?: string;
+    carbs?: string;
+    fat?: string;
+  } | null;
+  confidence: 'high' | 'medium' | 'low'; // How confident we are in the extraction
 }
 
 // Notification preferences
