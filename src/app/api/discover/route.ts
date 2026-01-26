@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
 
     // Fallback: Use TheMealDB (free API) and scraping
     console.log('Using fallback methods...');
-    const recipes = await fetchFallbackRecipes(ingredients, preferences, count);
+    const recipes = await fetchFallbackRecipes(ingredients, preferences, count, offset);
     console.log('Fallback returned:', recipes.length, 'recipes');
 
     if (recipes.length === 0) {
@@ -212,15 +212,16 @@ function cleanHtml(html: string): string {
 async function fetchFallbackRecipes(
   ingredients: string[],
   preferences: UserPreferences,
-  count: number
+  count: number,
+  offset: number = 0
 ): Promise<ExternalRecipe[]> {
   const recipes: ExternalRecipe[] = [];
 
   // 1. Try TheMealDB (completely free, no API key needed)
   try {
-    const mealDbRecipes = await fetchFromMealDB(ingredients, preferences, count);
+    const mealDbRecipes = await fetchFromMealDB(ingredients, preferences, count, offset);
     recipes.push(...mealDbRecipes);
-    console.log('MealDB returned:', mealDbRecipes.length, 'recipes');
+    console.log('MealDB returned:', mealDbRecipes.length, 'recipes at offset', offset);
   } catch (error) {
     console.error('MealDB error:', error);
   }
@@ -242,88 +243,92 @@ async function fetchFallbackRecipes(
 async function fetchFromMealDB(
   ingredients: string[],
   preferences: UserPreferences,
-  count: number
+  count: number,
+  offset: number = 0
 ): Promise<ExternalRecipe[]> {
-  const recipes: ExternalRecipe[] = [];
+  const allRecipes: ExternalRecipe[] = [];
+  const seenIds = new Set<string>();
 
-  // If ingredients provided, search by main ingredient
+  // If ingredients provided, search by each ingredient and combine results
   if (ingredients.length > 0) {
-    const mainIngredient = ingredients[0];
-    const url = `https://www.themealdb.com/api/json/v1/1/filter.php?i=${encodeURIComponent(mainIngredient)}`;
+    for (const ingredient of ingredients) {
+      const url = `https://www.themealdb.com/api/json/v1/1/filter.php?i=${encodeURIComponent(ingredient)}`;
 
-    try {
-      const response = await fetch(url);
-      if (response.ok) {
-        const data = await response.json();
-        const meals = data.meals?.slice(0, count) || [];
+      try {
+        const response = await fetch(url);
+        if (response.ok) {
+          const data = await response.json();
+          const meals = data.meals || [];
 
-        for (const meal of meals) {
-          // Get full details for each meal
-          const detailUrl = `https://www.themealdb.com/api/json/v1/1/lookup.php?i=${meal.idMeal}`;
-          const detailResponse = await fetch(detailUrl);
-          if (detailResponse.ok) {
-            const detailData = await detailResponse.json();
-            const fullMeal = detailData.meals?.[0];
-            if (fullMeal) {
-              recipes.push(mapMealDBToExternal(fullMeal));
+          for (const meal of meals) {
+            // Skip if we've already seen this recipe
+            if (seenIds.has(meal.idMeal)) continue;
+            seenIds.add(meal.idMeal);
+
+            // Get full details
+            const detailUrl = `https://www.themealdb.com/api/json/v1/1/lookup.php?i=${meal.idMeal}`;
+            const detailResponse = await fetch(detailUrl);
+            if (detailResponse.ok) {
+              const detailData = await detailResponse.json();
+              const fullMeal = detailData.meals?.[0];
+              if (fullMeal) {
+                // Check how many of our ingredients this recipe matches
+                const mealIngredients = getMealIngredients(fullMeal).join(' ').toLowerCase();
+                const matchCount = ingredients.filter(ing =>
+                  mealIngredients.includes(ing.toLowerCase())
+                ).length;
+
+                const recipe = mapMealDBToExternal(fullMeal);
+                // Store match count for sorting
+                (recipe as any)._matchCount = matchCount;
+                allRecipes.push(recipe);
+              }
             }
           }
         }
+      } catch (error) {
+        console.error('MealDB ingredient search error:', error);
       }
-    } catch (error) {
-      console.error('MealDB ingredient search error:', error);
     }
+
+    // Sort by number of matching ingredients (most matches first)
+    allRecipes.sort((a, b) => ((b as any)._matchCount || 0) - ((a as any)._matchCount || 0));
   }
 
-  // If no ingredients or no results, search by category or get random
-  if (recipes.length < count) {
-    // Try to get recipes by cuisine/category
-    const categories = ['Chicken', 'Beef', 'Pasta', 'Seafood', 'Vegetarian'];
-    const randomCategory = categories[Math.floor(Math.random() * categories.length)];
-
-    const url = `https://www.themealdb.com/api/json/v1/1/filter.php?c=${randomCategory}`;
-
-    try {
-      const response = await fetch(url);
-      if (response.ok) {
-        const data = await response.json();
-        const meals = data.meals?.slice(0, count - recipes.length) || [];
-
-        for (const meal of meals) {
-          const detailUrl = `https://www.themealdb.com/api/json/v1/1/lookup.php?i=${meal.idMeal}`;
-          const detailResponse = await fetch(detailUrl);
-          if (detailResponse.ok) {
-            const detailData = await detailResponse.json();
-            const fullMeal = detailData.meals?.[0];
-            if (fullMeal) {
-              recipes.push(mapMealDBToExternal(fullMeal));
-            }
+  // If no ingredients or no results, get random recipes
+  if (allRecipes.length === 0) {
+    // Get multiple random recipes
+    for (let i = 0; i < count + offset + 5; i++) {
+      try {
+        const response = await fetch('https://www.themealdb.com/api/json/v1/1/random.php');
+        if (response.ok) {
+          const data = await response.json();
+          const meal = data.meals?.[0];
+          if (meal && !seenIds.has(meal.idMeal)) {
+            seenIds.add(meal.idMeal);
+            allRecipes.push(mapMealDBToExternal(meal));
           }
         }
+      } catch (error) {
+        console.error('MealDB random error:', error);
       }
-    } catch (error) {
-      console.error('MealDB category search error:', error);
     }
   }
 
-  // If still no results, get random recipes
-  while (recipes.length < count) {
-    try {
-      const response = await fetch('https://www.themealdb.com/api/json/v1/1/random.php');
-      if (response.ok) {
-        const data = await response.json();
-        const meal = data.meals?.[0];
-        if (meal && !recipes.some(r => r.id === `mealdb-${meal.idMeal}`)) {
-          recipes.push(mapMealDBToExternal(meal));
-        }
-      }
-    } catch (error) {
-      console.error('MealDB random error:', error);
-      break;
+  // Apply offset and limit
+  return allRecipes.slice(offset, offset + count);
+}
+
+// Helper to extract all ingredients from a MealDB meal
+function getMealIngredients(meal: any): string[] {
+  const ingredients: string[] = [];
+  for (let i = 1; i <= 20; i++) {
+    const ingredient = meal[`strIngredient${i}`];
+    if (ingredient && ingredient.trim()) {
+      ingredients.push(ingredient.trim());
     }
   }
-
-  return recipes;
+  return ingredients;
 }
 
 interface MealDBMeal {
