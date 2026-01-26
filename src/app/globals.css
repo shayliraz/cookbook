@@ -132,40 +132,56 @@ html {
   }
 }
 
-/* RTL Support */
-.dir-rtl {
-  direction: rtl;
-  text-align: right;
+/* RTL Support - Strong enforcement */
+.dir-rtl,
+[dir="rtl"] {
+  direction: rtl !important;
+  text-align: right !important;
 }
 
-.dir-ltr {
-  direction: ltr;
-  text-align: left;
+.dir-ltr,
+[dir="ltr"] {
+  direction: ltr !important;
+  text-align: left !important;
 }
 
 .dir-auto {
   direction: auto;
 }
 
-/* Auto-detect RTL for specific elements */
-[dir="rtl"],
-.rtl {
+/* RTL text alignment utility */
+.text-rtl {
+  direction: rtl !important;
+  text-align: right !important;
+  unicode-bidi: embed;
+}
+
+/* Force RTL on elements with Hebrew/Arabic content */
+[dir="rtl"] *,
+.rtl-content * {
+  text-align: inherit;
+}
+
+/* RTL-aware flex - reversed layout for RTL */
+[dir="rtl"] .flex-rtl-aware,
+.rtl-flex {
+  flex-direction: row-reverse !important;
+}
+
+/* RTL list items */
+[dir="rtl"] li,
+.rtl-list li {
   direction: rtl;
   text-align: right;
 }
 
-/* RTL-aware flex utilities */
-.rtl .flex-row {
-  flex-direction: row-reverse;
-}
-
 /* RTL-aware margins and paddings */
-.rtl .ml-auto {
+[dir="rtl"] .ml-auto {
   margin-left: 0;
   margin-right: auto;
 }
 
-.rtl .mr-auto {
+[dir="rtl"] .mr-auto {
   margin-right: 0;
   margin-left: auto;
 }

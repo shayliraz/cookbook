@@ -1266,6 +1266,16 @@ function parseServings(value: unknown): number | null {
 }
 
 function cleanupRecipe(recipe: ScrapedRecipe, $: cheerio.CheerioAPI): ScrapedRecipe {
+  // Decode HTML entities in all text fields
+  recipe.title = decodeHtmlEntities(recipe.title);
+  recipe.description = recipe.description ? decodeHtmlEntities(recipe.description) : null;
+  recipe.ingredients = recipe.ingredients.map(decodeHtmlEntities);
+  recipe.instructions = recipe.instructions.map(decodeHtmlEntities);
+  recipe.author = recipe.author ? decodeHtmlEntities(recipe.author) : null;
+  recipe.cuisine = recipe.cuisine ? decodeHtmlEntities(recipe.cuisine) : null;
+  recipe.category = recipe.category ? decodeHtmlEntities(recipe.category) : null;
+  recipe.tags = recipe.tags.map(decodeHtmlEntities);
+
   // Remove duplicate ingredients/instructions
   recipe.ingredients = [...new Set(recipe.ingredients)].filter(Boolean);
   recipe.instructions = [...new Set(recipe.instructions)].filter(Boolean);
@@ -1294,4 +1304,46 @@ function cleanupRecipe(recipe: ScrapedRecipe, $: cheerio.CheerioAPI): ScrapedRec
   }
 
   return recipe;
+}
+
+/**
+ * Decode HTML entities like &#39; &amp; &quot; etc.
+ */
+function decodeHtmlEntities(text: string): string {
+  if (!text) return text;
+
+  // Decode numeric entities (&#39; &#x27; etc.)
+  let decoded = text
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(parseInt(code, 10)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, code) => String.fromCharCode(parseInt(code, 16)));
+
+  // Decode named entities
+  const entities: Record<string, string> = {
+    '&amp;': '&',
+    '&lt;': '<',
+    '&gt;': '>',
+    '&quot;': '"',
+    '&apos;': "'",
+    '&nbsp;': ' ',
+    '&ndash;': '\u2013', // en-dash
+    '&mdash;': '\u2014', // em-dash
+    '&lsquo;': '\u2018', // left single quote
+    '&rsquo;': '\u2019', // right single quote (apostrophe)
+    '&ldquo;': '\u201C', // left double quote
+    '&rdquo;': '\u201D', // right double quote
+    '&hellip;': '\u2026', // ellipsis
+    '&copy;': '\u00A9', // copyright
+    '&reg;': '\u00AE', // registered
+    '&trade;': '\u2122', // trademark
+    '&deg;': '\u00B0', // degree
+    '&frac12;': '\u00BD', // 1/2
+    '&frac14;': '\u00BC', // 1/4
+    '&frac34;': '\u00BE', // 3/4
+  };
+
+  for (const [entity, char] of Object.entries(entities)) {
+    decoded = decoded.replace(new RegExp(entity, 'g'), char);
+  }
+
+  return decoded;
 }

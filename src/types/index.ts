@@ -103,6 +103,9 @@ export interface ExternalRecipe {
   health_score: number | null;
   used_ingredients: string[];
   missed_ingredients: string[];
+  // Popularity metrics
+  aggregate_likes: number | null;
+  source_rating: number | null; // Rating from source site (if available)
 }
 
 // User cooking preferences (analyzed from saved recipes)

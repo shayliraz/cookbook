@@ -39,8 +39,14 @@ interface IngredientMatch {
 
 export default function DiscoverPage() {
   const [mode, setMode] = useState<SuggestionMode | null>(null);
-  const [maxTime, setMaxTime] = useState('');
   const [suggestions, setSuggestions] = useState<RecipeWithLogs[]>([]);
+
+  // Custom filter state - multiple options
+  const [maxTime, setMaxTime] = useState('');
+  const [minRating, setMinRating] = useState('');
+  const [selectedCuisine, setSelectedCuisine] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [notCookedDays, setNotCookedDays] = useState('');
 
   // Ingredient search state
   const [ingredientInput, setIngredientInput] = useState('');
@@ -123,6 +129,24 @@ export default function DiscoverPage() {
         if (!b.last_cooked) return 1;
         return new Date(a.last_cooked).getTime() - new Date(b.last_cooked).getTime();
       });
+  }, [recipes]);
+
+  // Get all cuisines from recipes for filter dropdown
+  const allCuisines = useMemo(() => {
+    const cuisines = new Set<string>();
+    recipes.forEach((r) => {
+      if (r.cuisine) cuisines.add(r.cuisine);
+    });
+    return Array.from(cuisines).sort();
+  }, [recipes]);
+
+  // Get all tags from recipes for filter dropdown
+  const allTags = useMemo(() => {
+    const tags = new Set<string>();
+    recipes.forEach((r) => {
+      r.tags.forEach((t) => tags.add(t));
+    });
+    return Array.from(tags).sort();
   }, [recipes]);
 
   const getRandomRecipe = () => {
@@ -246,6 +270,7 @@ export default function DiscoverPage() {
   const applyCustomFilter = () => {
     let filtered = [...recipes];
 
+    // Filter by max cooking time
     if (maxTime) {
       const time = parseInt(maxTime);
       filtered = filtered.filter((r) => {
@@ -253,6 +278,41 @@ export default function DiscoverPage() {
         return totalTime === 0 || totalTime <= time;
       });
     }
+
+    // Filter by minimum rating
+    if (minRating) {
+      const rating = parseFloat(minRating);
+      filtered = filtered.filter((r) => (r.average_rating || 0) >= rating);
+    }
+
+    // Filter by cuisine
+    if (selectedCuisine) {
+      filtered = filtered.filter((r) =>
+        r.cuisine?.toLowerCase().includes(selectedCuisine.toLowerCase())
+      );
+    }
+
+    // Filter by category/tag
+    if (selectedCategory) {
+      filtered = filtered.filter((r) =>
+        r.tags.some((t) => t.toLowerCase().includes(selectedCategory.toLowerCase()))
+      );
+    }
+
+    // Filter by not cooked in X days
+    if (notCookedDays) {
+      const days = parseInt(notCookedDays);
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - days);
+
+      filtered = filtered.filter((r) => {
+        if (!r.last_cooked) return true;
+        return new Date(r.last_cooked) < cutoffDate;
+      });
+    }
+
+    // Sort by rating (highest first)
+    filtered.sort((a, b) => (b.average_rating || 0) - (a.average_rating || 0));
 
     setSuggestions(filtered);
   };
@@ -483,8 +543,11 @@ export default function DiscoverPage() {
                 <Flame className="w-5 h-5 text-orange-500" />
                 Custom Filter
               </h3>
-              <div className="flex flex-wrap gap-4">
-                <div className="flex-1 min-w-[200px]">
+              <p className="text-sm text-gray-500 mb-4">
+                Combine multiple filters to find the perfect recipe
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div>
                   <Input
                     label="Max cooking time (minutes)"
                     type="number"
@@ -493,16 +556,88 @@ export default function DiscoverPage() {
                     placeholder="e.g., 45"
                   />
                 </div>
+                <div>
+                  <Input
+                    label="Minimum rating"
+                    type="number"
+                    min="1"
+                    max="5"
+                    step="0.5"
+                    value={minRating}
+                    onChange={(e) => setMinRating(e.target.value)}
+                    placeholder="e.g., 4"
+                  />
+                </div>
+                <div>
+                  <Input
+                    label="Not cooked in X days"
+                    type="number"
+                    value={notCookedDays}
+                    onChange={(e) => setNotCookedDays(e.target.value)}
+                    placeholder="e.g., 30"
+                  />
+                </div>
+                {allCuisines.length > 0 && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Cuisine
+                    </label>
+                    <select
+                      value={selectedCuisine}
+                      onChange={(e) => setSelectedCuisine(e.target.value)}
+                      className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    >
+                      <option value="">All cuisines</option>
+                      {allCuisines.map((cuisine) => (
+                        <option key={cuisine} value={cuisine}>
+                          {cuisine}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {allTags.length > 0 && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Category / Tag
+                    </label>
+                    <select
+                      value={selectedCategory}
+                      onChange={(e) => setSelectedCategory(e.target.value)}
+                      className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    >
+                      <option value="">All categories</option>
+                      {allTags.map((tag) => (
+                        <option key={tag} value={tag}>
+                          {tag}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
-              <Button
-                onClick={() => {
-                  setMode('custom');
-                  applyCustomFilter();
-                }}
-                className="mt-4"
-              >
-                Find Recipes
-              </Button>
+              <div className="flex gap-3 mt-4">
+                <Button
+                  onClick={() => {
+                    setMode('custom');
+                    applyCustomFilter();
+                  }}
+                >
+                  Find Recipes
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setMaxTime('');
+                    setMinRating('');
+                    setSelectedCuisine('');
+                    setSelectedCategory('');
+                    setNotCookedDays('');
+                  }}
+                >
+                  Clear Filters
+                </Button>
+              </div>
             </Card>
           </>
         ) : mode === 'discover' ? (
@@ -654,13 +789,26 @@ export default function DiscoverPage() {
                               <ChefHat className="w-16 h-16 text-indigo-300" />
                             </div>
                           )}
-                          {recipe.spoonacular_score && (
-                            <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-full">
-                              <span className="text-xs font-semibold text-indigo-600">
-                                Score: {Math.round(recipe.spoonacular_score)}
-                              </span>
-                            </div>
-                          )}
+                          {/* Popularity indicators */}
+                          <div className="absolute top-3 right-3 flex flex-col gap-1">
+                            {recipe.spoonacular_score && (
+                              <div className="bg-white/90 backdrop-blur-sm px-2 py-1 rounded-full">
+                                <span className="text-xs font-semibold text-indigo-600">
+                                  Score: {Math.round(recipe.spoonacular_score)}
+                                </span>
+                              </div>
+                            )}
+                            {recipe.aggregate_likes && recipe.aggregate_likes > 0 && (
+                              <div className="bg-white/90 backdrop-blur-sm px-2 py-1 rounded-full flex items-center gap-1">
+                                <Heart className="w-3 h-3 text-pink-500 fill-pink-500" />
+                                <span className="text-xs font-semibold text-pink-600">
+                                  {recipe.aggregate_likes > 1000
+                                    ? `${(recipe.aggregate_likes / 1000).toFixed(1)}k`
+                                    : recipe.aggregate_likes}
+                                </span>
+                              </div>
+                            )}
+                          </div>
                         </div>
 
                         <div className="p-4">

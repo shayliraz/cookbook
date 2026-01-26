@@ -128,8 +128,12 @@ export default function RecipePage() {
             <div className="flex items-start justify-between mb-4">
               <div className="flex-1">
                 <h1
-                  className={`text-2xl font-bold text-gray-800 mb-2 ${titleIsRTL ? 'text-right' : ''}`}
+                  className="text-2xl font-bold text-gray-800 mb-2"
                   dir={titleIsRTL ? 'rtl' : 'ltr'}
+                  style={{
+                    direction: titleIsRTL ? 'rtl' : 'ltr',
+                    textAlign: titleIsRTL ? 'right' : 'left',
+                  }}
                 >
                   {recipe.title}
                 </h1>
@@ -146,7 +150,16 @@ export default function RecipePage() {
 
             {/* Description */}
             {recipe.description && (
-              <p className="text-gray-600 mb-4">{recipe.description}</p>
+              <p
+                className="text-gray-600 mb-4"
+                dir={containsRTL(recipe.description) ? 'rtl' : 'ltr'}
+                style={{
+                  direction: containsRTL(recipe.description) ? 'rtl' : 'ltr',
+                  textAlign: containsRTL(recipe.description) ? 'right' : 'left',
+                }}
+              >
+                {recipe.description}
+              </p>
             )}
 
             {/* Meta badges */}
@@ -236,7 +249,7 @@ export default function RecipePage() {
             </div>
           </div>
 
-          <div className={`p-6 ${hasRTLContent ? 'text-right' : ''}`} dir={hasRTLContent ? 'rtl' : 'ltr'}>
+          <div className="p-6">
             {activeTab === 'ingredients' ? (
               <ul className="space-y-3">
                 {recipe.ingredients.map((ingredient, index) => {
@@ -244,11 +257,16 @@ export default function RecipePage() {
                   return (
                     <li
                       key={index}
-                      className={`flex items-start gap-3 ingredient-item ${ingredientIsRTL ? 'flex-row-reverse' : ''}`}
+                      className="flex items-start gap-3 ingredient-item"
                       dir={ingredientIsRTL ? 'rtl' : 'ltr'}
+                      style={{
+                        direction: ingredientIsRTL ? 'rtl' : 'ltr',
+                        textAlign: ingredientIsRTL ? 'right' : 'left',
+                        flexDirection: ingredientIsRTL ? 'row-reverse' : 'row',
+                      }}
                     >
                       <span className="flex-shrink-0 w-2 h-2 mt-2 bg-orange-400 rounded-full" />
-                      <span className="text-gray-700">{ingredient}</span>
+                      <span className="text-gray-700 flex-1">{ingredient}</span>
                     </li>
                   );
                 })}
@@ -260,13 +278,18 @@ export default function RecipePage() {
                   return (
                     <li
                       key={index}
-                      className={`flex gap-4 instruction-item ${instructionIsRTL ? 'flex-row-reverse' : ''}`}
+                      className="flex gap-4 instruction-item"
                       dir={instructionIsRTL ? 'rtl' : 'ltr'}
+                      style={{
+                        direction: instructionIsRTL ? 'rtl' : 'ltr',
+                        textAlign: instructionIsRTL ? 'right' : 'left',
+                        flexDirection: instructionIsRTL ? 'row-reverse' : 'row',
+                      }}
                     >
                       <span className="flex-shrink-0 w-8 h-8 bg-orange-100 text-orange-600 font-bold rounded-full flex items-center justify-center">
                         {index + 1}
                       </span>
-                      <p className="text-gray-700 pt-1">{instruction}</p>
+                      <p className="text-gray-700 pt-1 flex-1">{instruction}</p>
                     </li>
                   );
                 })}

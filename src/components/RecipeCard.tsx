@@ -47,8 +47,12 @@ export function RecipeCard({ recipe }: RecipeCardProps) {
         {/* Content */}
         <div className="flex-1 p-4 flex flex-col">
           <h3
-            className={`font-bold text-lg text-gray-800 line-clamp-2 mb-2 ${isRTL ? 'text-right' : ''}`}
+            className="font-bold text-lg text-gray-800 line-clamp-2 mb-2"
             dir={isRTL ? 'rtl' : 'ltr'}
+            style={{
+              direction: isRTL ? 'rtl' : 'ltr',
+              textAlign: isRTL ? 'right' : 'left',
+            }}
           >
             {recipe.title}
           </h3>
