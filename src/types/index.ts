@@ -86,3 +86,29 @@ export interface ShareableRecipe {
   sharedBy: string;
   sharedAt: string;
 }
+
+// External recipe discovery
+export interface ExternalRecipe {
+  id: string;
+  title: string;
+  image_url: string | null;
+  source_url: string;
+  source_name: string;
+  ready_in_minutes: number | null;
+  servings: number | null;
+  cuisines: string[];
+  dish_types: string[];
+  summary: string | null;
+  spoonacular_score: number | null;
+  health_score: number | null;
+  used_ingredients: string[];
+  missed_ingredients: string[];
+}
+
+// User cooking preferences (analyzed from saved recipes)
+export interface UserPreferences {
+  top_cuisines: string[];
+  common_ingredients: string[];
+  avg_cook_time: number;
+  preferred_tags: string[];
+}
