@@ -1269,7 +1269,7 @@ function cleanupRecipe(recipe: ScrapedRecipe, $: cheerio.CheerioAPI): ScrapedRec
   // Decode HTML entities in all text fields
   recipe.title = decodeHtmlEntities(recipe.title);
   recipe.description = recipe.description ? decodeHtmlEntities(recipe.description) : null;
-  recipe.ingredients = recipe.ingredients.map(decodeHtmlEntities);
+  recipe.ingredients = recipe.ingredients.map(decodeHtmlEntities).map(cleanFractions);
   recipe.instructions = recipe.instructions.map(decodeHtmlEntities);
   recipe.author = recipe.author ? decodeHtmlEntities(recipe.author) : null;
   recipe.cuisine = recipe.cuisine ? decodeHtmlEntities(recipe.cuisine) : null;
@@ -1346,4 +1346,49 @@ function decodeHtmlEntities(text: string): string {
   }
 
   return decoded;
+}
+
+/**
+ * Clean up ugly decimal fractions into readable forms.
+ * e.g. "0.33333334326744 cup" → "1/3 cup", "0.5 cup" → "1/2 cup"
+ */
+function cleanFractions(text: string): string {
+  if (!text) return text;
+
+  // Map of decimal values to their fraction representations
+  const fractionMap: Array<{ min: number; max: number; display: string }> = [
+    { min: 0.12, max: 0.13, display: '1/8' },
+    { min: 0.24, max: 0.26, display: '1/4' },
+    { min: 0.32, max: 0.35, display: '1/3' },
+    { min: 0.37, max: 0.38, display: '3/8' },
+    { min: 0.49, max: 0.51, display: '1/2' },
+    { min: 0.62, max: 0.63, display: '5/8' },
+    { min: 0.65, max: 0.68, display: '2/3' },
+    { min: 0.74, max: 0.76, display: '3/4' },
+    { min: 0.87, max: 0.88, display: '7/8' },
+  ];
+
+  // Replace long decimals (e.g., 0.33333334326744) with fractions
+  return text.replace(/(\d+)\.(\d{2,})/g, (match, whole, decimal) => {
+    const num = parseFloat(match);
+    const wholeNum = Math.floor(num);
+    const fractional = num - wholeNum;
+
+    // Check if the fractional part matches a known fraction
+    for (const frac of fractionMap) {
+      if (fractional >= frac.min && fractional <= frac.max) {
+        if (wholeNum === 0) {
+          return frac.display;
+        }
+        return `${wholeNum} ${frac.display}`;
+      }
+    }
+
+    // If no fraction match, just round to 2 decimal places
+    const rounded = Math.round(num * 100) / 100;
+    if (rounded === Math.floor(rounded)) {
+      return Math.floor(rounded).toString();
+    }
+    return rounded.toString();
+  });
 }
