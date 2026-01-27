@@ -15,23 +15,64 @@ import {
   Share2,
   Plus,
   Camera,
+  Shuffle,
+  Sparkles,
+  RefreshCw,
+  Loader2,
+  Heart,
+  Star,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { format } from 'date-fns';
 import Image from 'next/image';
 import Link from 'next/link';
 import { containsRTL } from '@/lib/rtl';
+import { ExternalRecipe } from '@/types';
 
 export default function RecipePage() {
   const params = useParams();
   const router = useRouter();
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'ingredients' | 'instructions'>('ingredients');
+  const [similarMode, setSimilarMode] = useState<'variation' | 'style' | null>(null);
+  const [similarRecipes, setSimilarRecipes] = useState<ExternalRecipe[]>([]);
+  const [similarLoading, setSimilarLoading] = useState(false);
 
   const getRecipeWithLogs = useCookingStore((state) => state.getRecipeWithLogs);
   const deleteRecipe = useCookingStore((state) => state.deleteRecipe);
 
   const recipe = getRecipeWithLogs(params.id as string);
+
+  const fetchSimilar = useCallback(async (mode: 'variation' | 'style') => {
+    if (!recipe) return;
+    setSimilarMode(mode);
+    setSimilarLoading(true);
+    setSimilarRecipes([]);
+    try {
+      const mainIngredients = recipe.ingredients
+        .slice(0, 5)
+        .map(i => i.replace(/[\d\/½⅓¼⅔¾\s]+(?:cup|tbsp|tsp|oz|g|ml|lb)s?\b/gi, '').trim())
+        .filter(i => i.length > 2);
+
+      const res = await fetch('/api/similar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          recipeTitle: recipe.title,
+          cuisine: recipe.cuisine,
+          ingredients: mainIngredients,
+          tags: recipe.tags,
+          mode,
+        }),
+      });
+      const data = await res.json();
+      setSimilarRecipes(data.recipes || []);
+    } catch (error) {
+      console.error('Failed to fetch similar recipes:', error);
+    } finally {
+      setSimilarLoading(false);
+    }
+  }, [recipe]);
 
   if (!recipe) {
     return (
@@ -367,6 +408,119 @@ export default function RecipePage() {
                 <Plus className="w-4 h-4 mr-1" />
                 Log Your First Cook
               </Button>
+            </Card>
+          )}
+        </div>
+
+        {/* Find Similar Recipes */}
+        <div className="mb-6">
+          <h2 className="text-xl font-bold text-gray-800 mb-4">Find Similar Recipes</h2>
+          <div className="flex gap-3 mb-4">
+            <button
+              onClick={() => fetchSimilar('variation')}
+              disabled={similarLoading}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-2xl font-semibold transition-all ${
+                similarMode === 'variation'
+                  ? 'bg-orange-500 text-white shadow-lg'
+                  : 'bg-orange-50 text-orange-600 hover:bg-orange-100'
+              }`}
+            >
+              <Sparkles className="w-4 h-4" />
+              Try a Variation
+            </button>
+            <button
+              onClick={() => fetchSimilar('style')}
+              disabled={similarLoading}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-2xl font-semibold transition-all ${
+                similarMode === 'style'
+                  ? 'bg-purple-500 text-white shadow-lg'
+                  : 'bg-purple-50 text-purple-600 hover:bg-purple-100'
+              }`}
+            >
+              <Shuffle className="w-4 h-4" />
+              Similar Style
+            </button>
+          </div>
+
+          {similarMode && (
+            <p className="text-sm text-gray-500 mb-3">
+              {similarMode === 'variation'
+                ? `Showing creative twists on "${recipe.title}"`
+                : `Showing different dishes with a similar style${recipe.cuisine ? ` (${recipe.cuisine})` : ''}`}
+            </p>
+          )}
+
+          {similarLoading && (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-6 h-6 text-orange-500 animate-spin" />
+              <span className="ml-2 text-gray-500">Finding recipes...</span>
+            </div>
+          )}
+
+          {!similarLoading && similarRecipes.length > 0 && (
+            <div className="space-y-3">
+              {similarRecipes.map((sr) => (
+                <a
+                  key={sr.id}
+                  href={sr.source_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block"
+                >
+                  <Card hover className="flex overflow-hidden">
+                    {sr.image_url && (
+                      <div className="relative w-24 h-24 flex-shrink-0">
+                        <Image
+                          src={sr.image_url}
+                          alt={sr.title}
+                          fill
+                          className="object-cover"
+                          unoptimized
+                        />
+                      </div>
+                    )}
+                    <div className="flex-1 p-3 min-w-0">
+                      <h4 className="font-semibold text-gray-800 text-sm line-clamp-1">{sr.title}</h4>
+                      <p className="text-xs text-gray-500 mt-1">{sr.source_name}</p>
+                      <div className="flex items-center gap-3 mt-1">
+                        {sr.ready_in_minutes && (
+                          <span className="text-xs text-gray-400 flex items-center gap-1">
+                            <Clock className="w-3 h-3" /> {sr.ready_in_minutes} min
+                          </span>
+                        )}
+                        {sr.aggregate_likes != null && sr.aggregate_likes > 0 && (
+                          <span className="text-xs text-gray-400 flex items-center gap-1">
+                            <Heart className="w-3 h-3" /> {sr.aggregate_likes}
+                          </span>
+                        )}
+                        {sr.spoonacular_score != null && sr.spoonacular_score > 0 && (
+                          <span className="text-xs text-gray-400 flex items-center gap-1">
+                            <Star className="w-3 h-3" /> {Math.round(sr.spoonacular_score)}
+                          </span>
+                        )}
+                      </div>
+                      {sr.summary && (
+                        <p className="text-xs text-gray-400 mt-1 line-clamp-2">{sr.summary}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center pr-3">
+                      <ExternalLink className="w-4 h-4 text-gray-300" />
+                    </div>
+                  </Card>
+                </a>
+              ))}
+              <button
+                onClick={() => fetchSimilar(similarMode!)}
+                className="w-full py-2 text-sm text-orange-600 hover:text-orange-700 font-medium flex items-center justify-center gap-1"
+              >
+                <RefreshCw className="w-4 h-4" /> Show Different
+              </button>
+            </div>
+          )}
+
+          {!similarLoading && similarMode && similarRecipes.length === 0 && (
+            <Card className="p-6 text-center">
+              <p className="text-gray-500 text-sm">No similar recipes found. Try the other mode!</p>
             </Card>
           )}
         </div>
