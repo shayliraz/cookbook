@@ -1,11 +1,14 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useCookingStore } from '@/lib/store';
+import { useSupabaseStore } from '@/lib/supabase-store';
+import { useAuth } from '@/lib/auth-context';
 import { RecipeCard } from '@/components/RecipeCard';
 import { AddRecipeModal } from '@/components/AddRecipeModal';
+import { AuthModal } from '@/components/auth/AuthModal';
 import { Button, Input } from '@/components/ui';
-import { Plus, Search, ChefHat, Sparkles, Filter, X } from 'lucide-react';
+import { Plus, Search, ChefHat, Sparkles, Filter, X, User, LogOut, Users, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 
 type SortOption = 'recent' | 'rating' | 'last_cooked' | 'times_cooked';
@@ -17,13 +20,36 @@ type FilterOption = {
 
 export default function Home() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('recent');
   const [filters, setFilters] = useState<FilterOption>({});
   const [showFilters, setShowFilters] = useState(false);
 
-  const getAllRecipesWithLogs = useCookingStore((state) => state.getAllRecipesWithLogs);
-  const recipes = getAllRecipesWithLogs();
+  const { user, profile, loading: authLoading, signOut } = useAuth();
+
+  // Use Supabase store when logged in, localStorage store when not
+  const localStore = useCookingStore();
+  const supabaseStore = useSupabaseStore();
+
+  // Initialize Supabase store when user logs in
+  useEffect(() => {
+    if (user && !supabaseStore.initialized && !supabaseStore.loading) {
+      supabaseStore.initialize(user.id);
+    }
+    if (!user && supabaseStore.initialized) {
+      supabaseStore.reset();
+    }
+  }, [user, supabaseStore]);
+
+  // Get recipes based on auth state
+  const recipes = useMemo(() => {
+    if (user && supabaseStore.initialized) {
+      return supabaseStore.getAllRecipesWithLogs();
+    }
+    return localStore.getAllRecipesWithLogs();
+  }, [user, supabaseStore.initialized, supabaseStore.recipes, supabaseStore.cookingLogs, localStore]);
 
   // Get unique cuisines and tags for filter options
   const allCuisines = useMemo(() => {
@@ -120,13 +146,58 @@ export default function Home() {
               <Link href="/discover">
                 <Button variant="ghost" size="sm">
                   <Sparkles className="w-4 h-4 mr-1" />
-                  What to Cook?
+                  Discover
                 </Button>
               </Link>
+              {user && (
+                <Link href="/spaces">
+                  <Button variant="ghost" size="sm">
+                    <Users className="w-4 h-4 mr-1" />
+                    Spaces
+                  </Button>
+                </Link>
+              )}
               <Button onClick={() => setIsAddModalOpen(true)} size="sm">
                 <Plus className="w-4 h-4 mr-1" />
-                Add Recipe
+                Add
               </Button>
+
+              {/* Auth UI */}
+              {authLoading ? (
+                <Loader2 className="w-5 h-5 text-gray-400 animate-spin" />
+              ) : user ? (
+                <div className="relative">
+                  <button
+                    onClick={() => setShowUserMenu(!showUserMenu)}
+                    className="w-9 h-9 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-semibold hover:bg-orange-200 transition-colors"
+                  >
+                    {profile?.display_name?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || 'U'}
+                  </button>
+                  {showUserMenu && (
+                    <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-50">
+                      <div className="px-4 py-2 border-b border-gray-100">
+                        <p className="font-medium text-gray-800 truncate">{profile?.display_name || 'User'}</p>
+                        <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          signOut();
+                          setShowUserMenu(false);
+                        }}
+                        className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        Sign Out
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <Button variant="secondary" size="sm" onClick={() => setIsAuthModalOpen(true)}>
+                  <User className="w-4 h-4 mr-1" />
+                  Sign In
+                </Button>
+              )}
             </div>
           </div>
 
@@ -305,6 +376,9 @@ export default function Home() {
 
       {/* Add Recipe Modal */}
       <AddRecipeModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} />
+
+      {/* Auth Modal */}
+      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
     </div>
   );
 }

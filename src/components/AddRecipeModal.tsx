@@ -85,6 +85,7 @@ export function AddRecipeModal({ isOpen, onClose }: AddRecipeModalProps) {
       servings: servings ? parseInt(servings) : null,
       cuisine: cuisine.trim() || null,
       tags: tags.split(',').map((t) => t.trim()).filter(Boolean),
+      notes: null,
     });
 
     handleClose();

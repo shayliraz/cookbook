@@ -221,6 +221,7 @@ export default function DiscoverPage() {
         servings: data.servings,
         cuisine: data.cuisine || recipe.cuisines?.[0] || null,
         tags: data.tags || recipe.dish_types || [],
+        notes: null,
       });
 
       alert(`"${data.title || recipe.title}" has been added to your collection!`);

@@ -13,6 +13,7 @@ export interface Recipe {
   servings: number | null;
   cuisine: string | null;
   tags: string[];
+  notes: string | null;
   created_at: string;
   updated_at: string;
 }

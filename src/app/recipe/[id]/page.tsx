@@ -21,6 +21,7 @@ import {
   Loader2,
   Heart,
   Star,
+  Edit3,
 } from 'lucide-react';
 import { useState, useCallback } from 'react';
 import { format } from 'date-fns';
@@ -28,18 +29,36 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { containsRTL } from '@/lib/rtl';
 import { ExternalRecipe } from '@/types';
+import { useAuth } from '@/lib/auth-context';
+import { useSupabaseStore } from '@/lib/supabase-store';
+import { EditRecipeModal } from '@/components/EditRecipeModal';
+import { ShareRecipeModal } from '@/components/ShareRecipeModal';
 
 export default function RecipePage() {
   const params = useParams();
   const router = useRouter();
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'ingredients' | 'instructions'>('ingredients');
   const [similarMode, setSimilarMode] = useState<'variation' | 'style' | null>(null);
   const [similarRecipes, setSimilarRecipes] = useState<ExternalRecipe[]>([]);
   const [similarLoading, setSimilarLoading] = useState(false);
 
-  const getRecipeWithLogs = useCookingStore((state) => state.getRecipeWithLogs);
-  const deleteRecipe = useCookingStore((state) => state.deleteRecipe);
+  const { user } = useAuth();
+  const localStore = useCookingStore();
+  const supabaseStore = useSupabaseStore();
+
+  // Use appropriate store based on auth state
+  const getRecipeWithLogs = user && supabaseStore.initialized
+    ? supabaseStore.getRecipeWithLogs
+    : localStore.getRecipeWithLogs;
+  const deleteRecipe = user && supabaseStore.initialized
+    ? supabaseStore.deleteRecipe
+    : localStore.deleteRecipe;
+  const updateRecipe = user && supabaseStore.initialized
+    ? supabaseStore.updateRecipe
+    : localStore.updateRecipe;
 
   const recipe = getRecipeWithLogs(params.id as string);
 
@@ -152,11 +171,26 @@ export default function RecipePage() {
 
           <div className="flex gap-2">
             <button
-              onClick={handleShare}
+              onClick={() => setIsEditModalOpen(true)}
               className="p-2 bg-white/90 backdrop-blur-sm rounded-full shadow-lg hover:bg-white transition-colors"
             >
-              <Share2 className="w-5 h-5 text-gray-700" />
+              <Edit3 className="w-5 h-5 text-gray-700" />
             </button>
+            {user ? (
+              <button
+                onClick={() => setIsShareModalOpen(true)}
+                className="p-2 bg-white/90 backdrop-blur-sm rounded-full shadow-lg hover:bg-white transition-colors"
+              >
+                <Share2 className="w-5 h-5 text-gray-700" />
+              </button>
+            ) : (
+              <button
+                onClick={handleShare}
+                className="p-2 bg-white/90 backdrop-blur-sm rounded-full shadow-lg hover:bg-white transition-colors"
+              >
+                <Share2 className="w-5 h-5 text-gray-700" />
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -543,6 +577,26 @@ export default function RecipePage() {
         recipeId={recipe.id}
         recipeName={recipe.title}
       />
+
+      {/* Edit Recipe Modal */}
+      <EditRecipeModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        recipe={recipe}
+        onSave={async (updates) => {
+          await updateRecipe(recipe.id, updates);
+        }}
+      />
+
+      {/* Share Recipe Modal */}
+      {user && (
+        <ShareRecipeModal
+          isOpen={isShareModalOpen}
+          onClose={() => setIsShareModalOpen(false)}
+          recipeId={recipe.id}
+          recipeTitle={recipe.title}
+        />
+      )}
     </div>
   );
 }
