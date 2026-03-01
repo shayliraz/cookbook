@@ -66,7 +66,8 @@ export default function Home() {
   }, [user, supabaseInitialized, supabaseRecipes, supabaseLogs, localStore, getSupabaseRecipesWithLogs]);
 
   // Show loading state while Supabase is initializing
-  const isDataLoading = authLoading || (user && !supabaseInitialized && supabaseLoading);
+  // When user exists but Supabase isn't initialized yet, show loading
+  const isDataLoading = authLoading || (user && !supabaseInitialized);
 
   // Get unique cuisines and tags for filter options
   const allCuisines = useMemo(() => {

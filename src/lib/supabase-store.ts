@@ -55,14 +55,23 @@ export const useSupabaseStore = create<SupabaseStore>((set, get) => ({
   initialized: false,
 
   initialize: async (userId: string) => {
-    if (!supabase) return;
+    if (!supabase) {
+      console.error('Supabase not configured');
+      set({ initialized: true, loading: false }); // Mark as initialized to prevent infinite loading
+      return;
+    }
     set({ loading: true });
-    await Promise.all([
-      get().fetchRecipes(userId),
-      get().fetchCookingLogs(userId),
-      get().fetchSharedSpaces(userId),
-    ]);
-    set({ loading: false, initialized: true });
+    try {
+      await Promise.all([
+        get().fetchRecipes(userId),
+        get().fetchCookingLogs(userId),
+        get().fetchSharedSpaces(userId),
+      ]);
+    } catch (error) {
+      console.error('Error initializing Supabase store:', error);
+    } finally {
+      set({ loading: false, initialized: true });
+    }
   },
 
   reset: () => {
@@ -79,30 +88,55 @@ export const useSupabaseStore = create<SupabaseStore>((set, get) => ({
 
   fetchRecipes: async (userId: string) => {
     if (!supabase) return;
-    const { data, error } = await supabase
-      .from('recipes')
-      .select('*')
-      .order('created_at', { ascending: false });
+    try {
+      const { data, error } = await supabase
+        .from('recipes')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
 
-    if (!error && data) {
-      set({ recipes: data });
+      if (error) {
+        console.error('Error fetching recipes:', error);
+        return;
+      }
+      set({ recipes: data || [] });
+    } catch (error) {
+      console.error('Error fetching recipes:', error);
     }
   },
 
   addRecipe: async (recipe) => {
-    if (!supabase) return null;
-    const { data, error } = await supabase
-      .from('recipes')
-      .insert([recipe])
-      .select()
-      .single();
-
-    if (!error && data) {
-      set((state) => ({ recipes: [data, ...state.recipes] }));
-      return data;
+    if (!supabase) {
+      console.error('Supabase not configured');
+      return null;
     }
-    console.error('Error adding recipe:', error);
-    return null;
+    try {
+      // Remove recipe_group if it's null to avoid errors if column doesn't exist
+      const recipeToInsert = { ...recipe };
+      if (recipeToInsert.recipe_group === null || recipeToInsert.recipe_group === undefined) {
+        delete (recipeToInsert as any).recipe_group;
+      }
+
+      const { data, error } = await supabase
+        .from('recipes')
+        .insert([recipeToInsert])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error adding recipe:', error);
+        return null;
+      }
+
+      if (data) {
+        set((state) => ({ recipes: [data, ...state.recipes] }));
+        return data;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error adding recipe:', error);
+      return null;
+    }
   },
 
   updateRecipe: async (id, updates) => {
@@ -156,19 +190,31 @@ export const useSupabaseStore = create<SupabaseStore>((set, get) => ({
   },
 
   addCookingLog: async (log) => {
-    if (!supabase) return null;
-    const { data, error } = await supabase
-      .from('cooking_logs')
-      .insert([log])
-      .select()
-      .single();
-
-    if (!error && data) {
-      set((state) => ({ cookingLogs: [data, ...state.cookingLogs] }));
-      return data;
+    if (!supabase) {
+      console.error('Supabase not configured');
+      return null;
     }
-    console.error('Error adding cooking log:', error);
-    return null;
+    try {
+      const { data, error } = await supabase
+        .from('cooking_logs')
+        .insert([log])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error adding cooking log:', error);
+        return null;
+      }
+
+      if (data) {
+        set((state) => ({ cookingLogs: [data, ...state.cookingLogs] }));
+        return data;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error adding cooking log:', error);
+      return null;
+    }
   },
 
   updateCookingLog: async (id, updates) => {
