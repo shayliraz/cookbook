@@ -23,6 +23,7 @@ export function EditRecipeModal({ isOpen, onClose, recipe, onSave }: EditRecipeM
   const [cuisine, setCuisine] = useState(recipe.cuisine || '');
   const [tags, setTags] = useState(recipe.tags.join(', '));
   const [notes, setNotes] = useState(recipe.notes || '');
+  const [recipeGroup, setRecipeGroup] = useState(recipe.recipe_group || '');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -37,6 +38,7 @@ export function EditRecipeModal({ isOpen, onClose, recipe, onSave }: EditRecipeM
       setCuisine(recipe.cuisine || '');
       setTags(recipe.tags.join(', '));
       setNotes(recipe.notes || '');
+      setRecipeGroup(recipe.recipe_group || '');
     }
   }, [isOpen, recipe]);
 
@@ -84,6 +86,7 @@ export function EditRecipeModal({ isOpen, onClose, recipe, onSave }: EditRecipeM
         cuisine: cuisine || undefined,
         tags: tags.split(',').map(t => t.trim()).filter(Boolean),
         notes: notes || undefined,
+        recipe_group: recipeGroup.trim() || null,
       });
       onClose();
     } catch (error) {
@@ -195,6 +198,23 @@ export function EditRecipeModal({ isOpen, onClose, recipe, onSave }: EditRecipeM
                 placeholder="e.g., dinner, quick, vegetarian"
               />
             </div>
+          </div>
+
+          {/* Recipe Group */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Recipe Group (optional)
+            </label>
+            <input
+              type="text"
+              value={recipeGroup}
+              onChange={(e) => setRecipeGroup(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+              placeholder="e.g., Weeknight Dinners, Holiday Baking"
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              Group recipes together for easier organization
+            </p>
           </div>
 
           {/* Ingredients */}

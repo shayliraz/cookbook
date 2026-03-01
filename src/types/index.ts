@@ -14,6 +14,7 @@ export interface Recipe {
   cuisine: string | null;
   tags: string[];
   notes: string | null;
+  recipe_group: string | null; // Manual grouping
   created_at: string;
   updated_at: string;
 }

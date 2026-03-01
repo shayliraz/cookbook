@@ -36,6 +36,7 @@ export interface DBRecipe {
   cuisine: string | null;
   tags: string[];
   notes: string | null;
+  recipe_group: string | null;
   created_at: string;
   updated_at: string;
 }

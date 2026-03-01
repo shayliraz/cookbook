@@ -3,7 +3,9 @@
 import { useState } from 'react';
 import { Modal, Button, Input, StarRating } from './ui';
 import { useCookingStore } from '@/lib/store';
-import { Camera, Users, X } from 'lucide-react';
+import { useSupabaseStore } from '@/lib/supabase-store';
+import { useAuth } from '@/lib/auth-context';
+import { Camera, Users, X, Loader2 } from 'lucide-react';
 
 interface CookingLogModalProps {
   isOpen: boolean;
@@ -20,8 +22,13 @@ export function CookingLogModal({ isOpen, onClose, recipeId, recipeName }: Cooki
   const [wouldMakeAgain, setWouldMakeAgain] = useState(true);
   const [cookedAt, setCookedAt] = useState(new Date().toISOString().split('T')[0]);
   const [photos, setPhotos] = useState<string[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState('');
 
-  const addCookingLog = useCookingStore((state) => state.addCookingLog);
+  // Auth and stores
+  const { user } = useAuth();
+  const localAddCookingLog = useCookingStore((state) => state.addCookingLog);
+  const { addCookingLog: supabaseAddCookingLog, initialized: supabaseInitialized } = useSupabaseStore();
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -44,24 +51,53 @@ export function CookingLogModal({ isOpen, onClose, recipeId, recipeName }: Cooki
     setPhotos(photos.filter((_, i) => i !== index));
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (rating === 0) {
-      alert('Please add a rating!');
+      setError('Please add a rating!');
       return;
     }
 
-    addCookingLog({
-      recipe_id: recipeId,
-      cooked_at: new Date(cookedAt).toISOString(),
-      rating,
-      notes: notes.trim() || null,
-      changes_made: changesMade.trim() || null,
-      who_was_there: whoWasThere.split(',').map((w) => w.trim()).filter(Boolean),
-      photo_urls: photos,
-      would_make_again: wouldMakeAgain,
-    });
+    setIsSaving(true);
+    setError('');
 
-    handleClose();
+    try {
+      if (user && supabaseInitialized) {
+        // Save to Supabase when logged in
+        const result = await supabaseAddCookingLog({
+          recipe_id: recipeId,
+          user_id: user.id,
+          cooked_at: new Date(cookedAt).toISOString(),
+          rating,
+          notes: notes.trim() || null,
+          modifications: changesMade.trim() || null,
+          people_served: whoWasThere.split(',').map((w) => w.trim()).filter(Boolean),
+          photo_urls: photos,
+        });
+        if (!result) {
+          setError('Failed to save cooking log. Please try again.');
+          setIsSaving(false);
+          return;
+        }
+      } else {
+        // Save to localStorage when not logged in
+        localAddCookingLog({
+          recipe_id: recipeId,
+          cooked_at: new Date(cookedAt).toISOString(),
+          rating,
+          notes: notes.trim() || null,
+          changes_made: changesMade.trim() || null,
+          who_was_there: whoWasThere.split(',').map((w) => w.trim()).filter(Boolean),
+          photo_urls: photos,
+          would_make_again: wouldMakeAgain,
+        });
+      }
+      handleClose();
+    } catch (err) {
+      console.error('Error saving cooking log:', err);
+      setError('Failed to save cooking log. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleClose = () => {
@@ -72,6 +108,8 @@ export function CookingLogModal({ isOpen, onClose, recipeId, recipeName }: Cooki
     setWouldMakeAgain(true);
     setCookedAt(new Date().toISOString().split('T')[0]);
     setPhotos([]);
+    setIsSaving(false);
+    setError('');
     onClose();
   };
 
@@ -201,13 +239,25 @@ export function CookingLogModal({ isOpen, onClose, recipeId, recipeName }: Cooki
           </label>
         </div>
 
+        {/* Error message */}
+        {error && (
+          <p className="text-sm text-red-500 text-center">{error}</p>
+        )}
+
         {/* Actions */}
         <div className="flex gap-3 pt-4 border-t border-gray-100">
-          <Button variant="secondary" onClick={handleClose} className="flex-1">
+          <Button variant="secondary" onClick={handleClose} className="flex-1" disabled={isSaving}>
             Cancel
           </Button>
-          <Button onClick={handleSave} className="flex-1">
-            Save Log 🎉
+          <Button onClick={handleSave} className="flex-1" disabled={isSaving}>
+            {isSaving ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              'Save Log'
+            )}
           </Button>
         </div>
       </div>

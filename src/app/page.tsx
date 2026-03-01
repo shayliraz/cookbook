@@ -5,13 +5,17 @@ import { useCookingStore } from '@/lib/store';
 import { useSupabaseStore } from '@/lib/supabase-store';
 import { useAuth } from '@/lib/auth-context';
 import { RecipeCard } from '@/components/RecipeCard';
+import { RecipeListItem } from '@/components/RecipeListItem';
 import { AddRecipeModal } from '@/components/AddRecipeModal';
 import { AuthModal } from '@/components/auth/AuthModal';
 import { Button, Input } from '@/components/ui';
-import { Plus, Search, ChefHat, Sparkles, Filter, X, User, LogOut, Users, Loader2 } from 'lucide-react';
+import { Plus, Search, ChefHat, Sparkles, Filter, X, User, LogOut, Users, Loader2, Grid3X3, List, FolderOpen } from 'lucide-react';
 import Link from 'next/link';
+import { RecipeWithLogs } from '@/types';
 
 type SortOption = 'recent' | 'rating' | 'last_cooked' | 'times_cooked';
+type ViewMode = 'grid' | 'list';
+type GroupMode = 'none' | 'group';
 type FilterOption = {
   cuisine?: string;
   minRating?: number;
@@ -26,6 +30,8 @@ export default function Home() {
   const [sortBy, setSortBy] = useState<SortOption>('recent');
   const [filters, setFilters] = useState<FilterOption>({});
   const [showFilters, setShowFilters] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [groupMode, setGroupMode] = useState<GroupMode>('none');
 
   const { user, profile, loading: authLoading, signOut } = useAuth();
 
@@ -71,6 +77,14 @@ export default function Home() {
   const allTags = useMemo(() => {
     const tags = recipes.flatMap((r) => r.tags);
     return [...new Set(tags)];
+  }, [recipes]);
+
+  // Get unique recipe groups
+  const allGroups = useMemo(() => {
+    const groups = recipes
+      .map((r) => r.recipe_group)
+      .filter((g): g is string => g !== null && g !== undefined && g.trim() !== '');
+    return [...new Set(groups)].sort();
   }, [recipes]);
 
   // Filter and sort recipes
@@ -129,6 +143,27 @@ export default function Home() {
 
     return result;
   }, [recipes, searchQuery, sortBy, filters]);
+
+  // Group recipes by recipe_group
+  const groupedRecipes = useMemo(() => {
+    if (groupMode !== 'group') return null;
+
+    const groups: Record<string, RecipeWithLogs[]> = {};
+    const ungrouped: RecipeWithLogs[] = [];
+
+    filteredRecipes.forEach((recipe) => {
+      if (recipe.recipe_group && recipe.recipe_group.trim()) {
+        if (!groups[recipe.recipe_group]) {
+          groups[recipe.recipe_group] = [];
+        }
+        groups[recipe.recipe_group].push(recipe);
+      } else {
+        ungrouped.push(recipe);
+      }
+    });
+
+    return { groups, ungrouped };
+  }, [filteredRecipes, groupMode]);
 
   const clearFilters = () => {
     setFilters({});
@@ -234,6 +269,50 @@ export default function Home() {
           {/* Filters Panel */}
           {showFilters && (
             <div className="mt-4 p-4 bg-gray-50 rounded-2xl animate-slideDown">
+              {/* View Mode and Group Mode */}
+              <div className="flex items-center gap-4 mb-4 pb-4 border-b border-gray-200">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-gray-500">View:</span>
+                  <div className="flex bg-white rounded-lg border border-gray-200 p-1">
+                    <button
+                      onClick={() => setViewMode('grid')}
+                      className={`p-1.5 rounded ${viewMode === 'grid' ? 'bg-orange-100 text-orange-600' : 'text-gray-400 hover:text-gray-600'}`}
+                      title="Grid view"
+                    >
+                      <Grid3X3 className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setViewMode('list')}
+                      className={`p-1.5 rounded ${viewMode === 'list' ? 'bg-orange-100 text-orange-600' : 'text-gray-400 hover:text-gray-600'}`}
+                      title="List view"
+                    >
+                      <List className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {allGroups.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-gray-500">Group by:</span>
+                    <div className="flex bg-white rounded-lg border border-gray-200 p-1">
+                      <button
+                        onClick={() => setGroupMode('none')}
+                        className={`px-2 py-1 rounded text-xs ${groupMode === 'none' ? 'bg-orange-100 text-orange-600' : 'text-gray-400 hover:text-gray-600'}`}
+                      >
+                        None
+                      </button>
+                      <button
+                        onClick={() => setGroupMode('group')}
+                        className={`px-2 py-1 rounded text-xs flex items-center gap-1 ${groupMode === 'group' ? 'bg-orange-100 text-orange-600' : 'text-gray-400 hover:text-gray-600'}`}
+                      >
+                        <FolderOpen className="w-3 h-3" />
+                        Groups
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div className="flex flex-wrap gap-4">
                 {/* Sort */}
                 <div>
@@ -358,13 +437,74 @@ export default function Home() {
           </div>
         )}
 
-        {/* Recipe Grid */}
+        {/* Recipe Grid/List */}
         {isDataLoading ? null : filteredRecipes.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredRecipes.map((recipe) => (
-              <RecipeCard key={recipe.id} recipe={recipe} />
-            ))}
-          </div>
+          groupMode === 'group' && groupedRecipes ? (
+            // Grouped view
+            <div className="space-y-8">
+              {/* Grouped recipes */}
+              {Object.entries(groupedRecipes.groups).sort(([a], [b]) => a.localeCompare(b)).map(([groupName, groupRecipes]) => (
+                <div key={groupName}>
+                  <div className="flex items-center gap-2 mb-4">
+                    <FolderOpen className="w-5 h-5 text-orange-500" />
+                    <h2 className="text-lg font-bold text-gray-800">{groupName}</h2>
+                    <span className="text-sm text-gray-500">({groupRecipes.length})</span>
+                  </div>
+                  {viewMode === 'grid' ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {groupRecipes.map((recipe) => (
+                        <RecipeCard key={recipe.id} recipe={recipe} />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {groupRecipes.map((recipe) => (
+                        <RecipeListItem key={recipe.id} recipe={recipe} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {/* Ungrouped recipes */}
+              {groupedRecipes.ungrouped.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-4">
+                    <ChefHat className="w-5 h-5 text-gray-400" />
+                    <h2 className="text-lg font-bold text-gray-600">Ungrouped</h2>
+                    <span className="text-sm text-gray-500">({groupedRecipes.ungrouped.length})</span>
+                  </div>
+                  {viewMode === 'grid' ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {groupedRecipes.ungrouped.map((recipe) => (
+                        <RecipeCard key={recipe.id} recipe={recipe} />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {groupedRecipes.ungrouped.map((recipe) => (
+                        <RecipeListItem key={recipe.id} recipe={recipe} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : viewMode === 'grid' ? (
+            // Grid view
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredRecipes.map((recipe) => (
+                <RecipeCard key={recipe.id} recipe={recipe} />
+              ))}
+            </div>
+          ) : (
+            // List view
+            <div className="space-y-3">
+              {filteredRecipes.map((recipe) => (
+                <RecipeListItem key={recipe.id} recipe={recipe} />
+              ))}
+            </div>
+          )
         ) : recipes.length > 0 ? (
           <div className="text-center py-12">
             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">

@@ -30,6 +30,7 @@ CREATE TABLE recipes (
   cuisine TEXT,
   tags TEXT[] DEFAULT '{}',
   notes TEXT,
+  recipe_group TEXT, -- Optional grouping name for organizing recipes
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

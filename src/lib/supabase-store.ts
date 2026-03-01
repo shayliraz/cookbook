@@ -371,6 +371,7 @@ export const useSupabaseStore = create<SupabaseStore>((set, get) => ({
       cuisine: recipe.cuisine,
       tags: recipe.tags,
       notes: recipe.notes,
+      recipe_group: recipe.recipe_group || null,
       created_at: recipe.created_at,
       updated_at: recipe.updated_at,
       cooking_logs: logs.map(l => ({
@@ -417,6 +418,7 @@ export const useSupabaseStore = create<SupabaseStore>((set, get) => ({
         cuisine: recipe.cuisine,
         tags: recipe.tags,
         notes: recipe.notes,
+        recipe_group: recipe.recipe_group || null,
         created_at: recipe.created_at,
         updated_at: recipe.updated_at,
         cooking_logs: logs.map(l => ({

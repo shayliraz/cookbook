@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { Modal, Button, Input } from './ui';
 import { useCookingStore } from '@/lib/store';
+import { useSupabaseStore } from '@/lib/supabase-store';
+import { useAuth } from '@/lib/auth-context';
 import { ScrapedRecipe } from '@/types';
 import { Link, Loader2, Plus, X, Sparkles } from 'lucide-react';
 
@@ -14,6 +16,7 @@ interface AddRecipeModalProps {
 export function AddRecipeModal({ isOpen, onClose }: AddRecipeModalProps) {
   const [url, setUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
   const [scrapedData, setScrapedData] = useState<ScrapedRecipe | null>(null);
   const [manualMode, setManualMode] = useState(false);
@@ -28,8 +31,12 @@ export function AddRecipeModal({ isOpen, onClose }: AddRecipeModalProps) {
   const [servings, setServings] = useState('');
   const [tags, setTags] = useState('');
   const [cuisine, setCuisine] = useState('');
+  const [recipeGroup, setRecipeGroup] = useState('');
 
-  const addRecipe = useCookingStore((state) => state.addRecipe);
+  // Auth and stores
+  const { user } = useAuth();
+  const localAddRecipe = useCookingStore((state) => state.addRecipe);
+  const { addRecipe: supabaseAddRecipe, initialized: supabaseInitialized } = useSupabaseStore();
 
   const handleScrape = async () => {
     if (!url) return;
@@ -67,13 +74,16 @@ export function AddRecipeModal({ isOpen, onClose }: AddRecipeModalProps) {
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!title.trim()) {
       setError('Please enter a recipe title');
       return;
     }
 
-    addRecipe({
+    setIsSaving(true);
+    setError('');
+
+    const recipeData = {
       title: title.trim(),
       description: description.trim() || null,
       source_url: url || null,
@@ -86,9 +96,32 @@ export function AddRecipeModal({ isOpen, onClose }: AddRecipeModalProps) {
       cuisine: cuisine.trim() || null,
       tags: tags.split(',').map((t) => t.trim()).filter(Boolean),
       notes: null,
-    });
+      recipe_group: recipeGroup.trim() || null,
+    };
 
-    handleClose();
+    try {
+      if (user && supabaseInitialized) {
+        // Save to Supabase when logged in
+        const result = await supabaseAddRecipe({
+          ...recipeData,
+          user_id: user.id,
+        });
+        if (!result) {
+          setError('Failed to save recipe. Please try again.');
+          setIsSaving(false);
+          return;
+        }
+      } else {
+        // Save to localStorage when not logged in
+        localAddRecipe(recipeData);
+      }
+      handleClose();
+    } catch (err) {
+      console.error('Error saving recipe:', err);
+      setError('Failed to save recipe. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleClose = () => {
@@ -105,6 +138,8 @@ export function AddRecipeModal({ isOpen, onClose }: AddRecipeModalProps) {
     setServings('');
     setTags('');
     setCuisine('');
+    setRecipeGroup('');
+    setIsSaving(false);
     onClose();
   };
 
@@ -245,6 +280,13 @@ export function AddRecipeModal({ isOpen, onClose }: AddRecipeModalProps) {
               />
             </div>
 
+            <Input
+              label="Recipe Group (optional)"
+              value={recipeGroup}
+              onChange={(e) => setRecipeGroup(e.target.value)}
+              placeholder="e.g., Weeknight Dinners, Holiday Baking"
+            />
+
             {/* Ingredients */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -317,11 +359,18 @@ export function AddRecipeModal({ isOpen, onClose }: AddRecipeModalProps) {
 
             {/* Actions */}
             <div className="flex gap-3 pt-4 border-t border-gray-100">
-              <Button variant="secondary" onClick={handleClose} className="flex-1">
+              <Button variant="secondary" onClick={handleClose} className="flex-1" disabled={isSaving}>
                 Cancel
               </Button>
-              <Button onClick={handleSave} className="flex-1">
-                Save Recipe
+              <Button onClick={handleSave} className="flex-1" disabled={isSaving}>
+                {isSaving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  'Save Recipe'
+                )}
               </Button>
             </div>
           </div>
