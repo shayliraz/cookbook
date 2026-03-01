@@ -100,12 +100,15 @@ export function AddRecipeModal({ isOpen, onClose }: AddRecipeModalProps) {
     };
 
     try {
+      console.log('Saving recipe with data:', recipeData);
       if (user && supabaseInitialized) {
         // Save to Supabase when logged in
+        console.log('Saving to Supabase for user:', user.id);
         const result = await supabaseAddRecipe({
           ...recipeData,
           user_id: user.id,
         });
+        console.log('Supabase result:', result);
         if (!result) {
           setError('Failed to save recipe. Please try again.');
           setIsSaving(false);
