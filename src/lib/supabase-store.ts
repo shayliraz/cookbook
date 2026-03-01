@@ -117,11 +117,18 @@ export const useSupabaseStore = create<SupabaseStore>((set, get) => ({
         delete (recipeToInsert as any).recipe_group;
       }
 
-      const { data, error } = await supabase
-        .from('recipes')
-        .insert([recipeToInsert])
-        .select()
-        .single();
+      // Create timeout promise
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Request timeout after 15 seconds')), 15000)
+      );
+
+      // Race between the actual request and timeout
+      const result = await Promise.race([
+        supabase.from('recipes').insert([recipeToInsert]).select().single(),
+        timeoutPromise
+      ]);
+
+      const { data, error } = result as { data: any; error: any };
 
       if (error) {
         console.error('Error adding recipe:', error);
@@ -134,7 +141,7 @@ export const useSupabaseStore = create<SupabaseStore>((set, get) => ({
       }
       return null;
     } catch (error) {
-      console.error('Error adding recipe:', error);
+      console.error('Error adding recipe (timeout or network):', error);
       return null;
     }
   },
