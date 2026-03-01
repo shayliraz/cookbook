@@ -166,29 +166,15 @@ CREATE POLICY "Owners can update spaces" ON shared_spaces
 CREATE POLICY "Owners can delete spaces" ON shared_spaces
   FOR DELETE USING (owner_id = auth.uid());
 
--- Shared space members policies
-CREATE POLICY "Members can view space members" ON shared_space_members
-  FOR SELECT USING (
-    space_id IN (SELECT space_id FROM shared_space_members WHERE user_id = auth.uid())
-  );
+-- Shared space members policies (non-recursive to avoid infinite recursion)
+CREATE POLICY "ssm_select_own" ON shared_space_members
+  FOR SELECT USING (user_id = auth.uid());
 
-CREATE POLICY "Admins can add members" ON shared_space_members
-  FOR INSERT WITH CHECK (
-    space_id IN (
-      SELECT space_id FROM shared_space_members
-      WHERE user_id = auth.uid() AND role IN ('owner', 'admin')
-    ) OR
-    user_id = auth.uid()
-  );
+CREATE POLICY "ssm_insert_own" ON shared_space_members
+  FOR INSERT WITH CHECK (user_id = auth.uid());
 
-CREATE POLICY "Admins can remove members" ON shared_space_members
-  FOR DELETE USING (
-    space_id IN (
-      SELECT space_id FROM shared_space_members
-      WHERE user_id = auth.uid() AND role IN ('owner', 'admin')
-    ) OR
-    user_id = auth.uid()
-  );
+CREATE POLICY "ssm_delete_own" ON shared_space_members
+  FOR DELETE USING (user_id = auth.uid());
 
 -- Shared space recipes policies
 CREATE POLICY "Members can view space recipes" ON shared_space_recipes
