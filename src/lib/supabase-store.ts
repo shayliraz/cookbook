@@ -122,9 +122,8 @@ export const useSupabaseStore = create<SupabaseStore>((set, get) => ({
         recipeToInsert.description = recipeToInsert.description.substring(0, 1000);
       }
       if (recipeToInsert.image_url && recipeToInsert.image_url.length > 500) {
-        recipeToInsert.image_url = null; // Skip very long image URLs
+        recipeToInsert.image_url = null;
       }
-      // Limit arrays to 50 items max
       if (recipeToInsert.ingredients && recipeToInsert.ingredients.length > 50) {
         recipeToInsert.ingredients = recipeToInsert.ingredients.slice(0, 50);
       }
@@ -132,27 +131,28 @@ export const useSupabaseStore = create<SupabaseStore>((set, get) => ({
         recipeToInsert.instructions = recipeToInsert.instructions.slice(0, 50);
       }
 
-      console.log('Inserting recipe with truncated data:', {
-        title: recipeToInsert.title,
-        descLength: recipeToInsert.description?.length,
-        imageUrl: recipeToInsert.image_url ? 'set' : 'null',
-        ingredientsCount: recipeToInsert.ingredients?.length,
-        instructionsCount: recipeToInsert.instructions?.length,
-      });
+      console.log('Inserting recipe:', recipeToInsert.title);
 
-      // Simple insert without timeout first to test
-      const { data, error } = await supabase
+      // Use Promise.race for timeout
+      const timeoutPromise = new Promise<{ data: null; error: Error }>((resolve) =>
+        setTimeout(() => resolve({ data: null, error: new Error('Timeout after 10s') }), 10000)
+      );
+
+      const insertPromise = supabase
         .from('recipes')
         .insert([recipeToInsert])
         .select()
         .single();
 
+      const { data, error } = await Promise.race([insertPromise, timeoutPromise]);
+
       if (error) {
-        console.error('Error adding recipe:', error);
+        console.error('Error adding recipe:', error.message || error);
         return null;
       }
 
       if (data) {
+        console.log('Recipe saved successfully:', data.id);
         set((state) => ({ recipes: [data, ...state.recipes] }));
         return data;
       }
