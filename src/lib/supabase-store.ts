@@ -122,23 +122,37 @@ export const useSupabaseStore = create<SupabaseStore>((set, get) => ({
         setTimeout(() => reject(new Error('Request timeout after 15 seconds')), 15000)
       );
 
-      // Race between the actual request and timeout
-      const result = await Promise.race([
-        supabase.from('recipes').insert([recipeToInsert]).select().single(),
+      // Try insert without select first (faster)
+      const insertResult = await Promise.race([
+        supabase.from('recipes').insert([recipeToInsert]).select('id').single(),
         timeoutPromise
-      ]);
+      ]) as { data: any; error: any };
 
-      const { data, error } = result as { data: any; error: any };
-
-      if (error) {
-        console.error('Error adding recipe:', error);
+      if (insertResult.error) {
+        console.error('Error adding recipe:', insertResult.error);
         return null;
       }
 
-      if (data) {
-        set((state) => ({ recipes: [data, ...state.recipes] }));
-        return data;
+      // If insert succeeded, fetch the full recipe
+      if (insertResult.data?.id) {
+        const { data: fullRecipe, error: fetchError } = await supabase
+          .from('recipes')
+          .select('*')
+          .eq('id', insertResult.data.id)
+          .single();
+
+        if (fetchError) {
+          console.error('Error fetching saved recipe:', fetchError);
+          // Still return partial data since insert succeeded
+          return { ...recipeToInsert, id: insertResult.data.id } as any;
+        }
+
+        if (fullRecipe) {
+          set((state) => ({ recipes: [fullRecipe, ...state.recipes] }));
+          return fullRecipe;
+        }
       }
+
       return null;
     } catch (error) {
       console.error('Error adding recipe (timeout or network):', error);
