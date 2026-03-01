@@ -16,13 +16,22 @@ import Image from 'next/image';
 export default function SpacesPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
-  const { sharedSpaces, createSharedSpace, joinSpaceByCode, leaveSpace, fetchSharedSpaces } = useSupabaseStore();
-  
+  const {
+    sharedSpaces,
+    createSharedSpace,
+    joinSpaceByCode,
+    leaveSpace,
+    fetchSharedSpaces,
+    initialized: supabaseInitialized,
+    loading: supabaseLoading
+  } = useSupabaseStore();
+
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [selectedSpace, setSelectedSpace] = useState<DBSharedSpace | null>(null);
   const [spaceRecipes, setSpaceRecipes] = useState<DBRecipe[]>([]);
   const [loadingRecipes, setLoadingRecipes] = useState(false);
+  const [loadingSpaces, setLoadingSpaces] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -31,9 +40,14 @@ export default function SpacesPage() {
   }, [user, authLoading, router]);
 
   useEffect(() => {
-    if (user) {
-      fetchSharedSpaces(user.id);
-    }
+    const loadSpaces = async () => {
+      if (user) {
+        setLoadingSpaces(true);
+        await fetchSharedSpaces(user.id);
+        setLoadingSpaces(false);
+      }
+    };
+    loadSpaces();
   }, [user, fetchSharedSpaces]);
 
   useEffect(() => {
@@ -56,10 +70,11 @@ export default function SpacesPage() {
     setLoadingRecipes(false);
   };
 
-  if (authLoading) {
+  if (authLoading || loadingSpaces) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center flex-col gap-3">
         <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
+        <p className="text-gray-500 text-sm">Loading spaces...</p>
       </div>
     );
   }

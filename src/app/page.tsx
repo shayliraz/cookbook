@@ -31,25 +31,36 @@ export default function Home() {
 
   // Use Supabase store when logged in, localStorage store when not
   const localStore = useCookingStore();
-  const supabaseStore = useSupabaseStore();
+  const {
+    recipes: supabaseRecipes,
+    cookingLogs: supabaseLogs,
+    initialized: supabaseInitialized,
+    loading: supabaseLoading,
+    initialize: initializeSupabase,
+    reset: resetSupabase,
+    getAllRecipesWithLogs: getSupabaseRecipesWithLogs
+  } = useSupabaseStore();
 
   // Initialize Supabase store when user logs in
   useEffect(() => {
-    if (user && !supabaseStore.initialized && !supabaseStore.loading) {
-      supabaseStore.initialize(user.id);
+    if (user && !supabaseInitialized && !supabaseLoading) {
+      initializeSupabase(user.id);
     }
-    if (!user && supabaseStore.initialized) {
-      supabaseStore.reset();
+    if (!user && supabaseInitialized) {
+      resetSupabase();
     }
-  }, [user, supabaseStore]);
+  }, [user, supabaseInitialized, supabaseLoading, initializeSupabase, resetSupabase]);
 
   // Get recipes based on auth state
   const recipes = useMemo(() => {
-    if (user && supabaseStore.initialized) {
-      return supabaseStore.getAllRecipesWithLogs();
+    if (user && supabaseInitialized) {
+      return getSupabaseRecipesWithLogs();
     }
     return localStore.getAllRecipesWithLogs();
-  }, [user, supabaseStore.initialized, supabaseStore.recipes, supabaseStore.cookingLogs, localStore]);
+  }, [user, supabaseInitialized, supabaseRecipes, supabaseLogs, localStore, getSupabaseRecipesWithLogs]);
+
+  // Show loading state while Supabase is initializing
+  const isDataLoading = authLoading || (user && !supabaseInitialized && supabaseLoading);
 
   // Get unique cuisines and tags for filter options
   const allCuisines = useMemo(() => {
@@ -317,8 +328,16 @@ export default function Home() {
 
       {/* Main Content */}
       <main className="max-w-6xl mx-auto px-4 py-6">
+        {/* Loading State */}
+        {isDataLoading && (
+          <div className="flex flex-col items-center justify-center py-16">
+            <Loader2 className="w-10 h-10 text-orange-500 animate-spin mb-4" />
+            <p className="text-gray-500">Loading your recipes...</p>
+          </div>
+        )}
+
         {/* Stats */}
-        {recipes.length > 0 && (
+        {!isDataLoading && recipes.length > 0 && (
           <div className="flex gap-4 mb-6 overflow-x-auto pb-2">
             <div className="flex-shrink-0 px-4 py-3 bg-white rounded-2xl shadow-sm border border-gray-100">
               <p className="text-2xl font-bold text-orange-500">{recipes.length}</p>
@@ -340,7 +359,7 @@ export default function Home() {
         )}
 
         {/* Recipe Grid */}
-        {filteredRecipes.length > 0 ? (
+        {isDataLoading ? null : filteredRecipes.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredRecipes.map((recipe) => (
               <RecipeCard key={recipe.id} recipe={recipe} />
