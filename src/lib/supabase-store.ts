@@ -131,67 +131,41 @@ export const useSupabaseStore = create<SupabaseStore>((set, get) => ({
         recipeToInsert.instructions = recipeToInsert.instructions.slice(0, 50);
       }
 
-      console.log('Inserting recipe:', recipeToInsert.title, 'at', new Date().toISOString());
+      console.log('Inserting recipe:', recipeToInsert.title);
 
-      // Use direct fetch API instead of Supabase JS client
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      // Use Supabase JS client with proper array handling
+      const { data, error } = await supabase
+        .from('recipes')
+        .insert([{
+          user_id: recipeToInsert.user_id,
+          title: recipeToInsert.title,
+          description: recipeToInsert.description || null,
+          source_url: recipeToInsert.source_url || null,
+          image_url: recipeToInsert.image_url || null,
+          ingredients: recipeToInsert.ingredients || [],
+          instructions: recipeToInsert.instructions || [],
+          prep_time: recipeToInsert.prep_time || null,
+          cook_time: recipeToInsert.cook_time || null,
+          servings: recipeToInsert.servings || null,
+          cuisine: recipeToInsert.cuisine || null,
+          tags: recipeToInsert.tags || [],
+          notes: recipeToInsert.notes || null,
+        }])
+        .select()
+        .single();
 
-      if (!supabaseUrl || !supabaseKey) {
-        console.error('Supabase URL or key not configured');
+      if (error) {
+        console.error('Error adding recipe:', error.message, error.details, error.hint);
         return null;
       }
 
-      // Get auth token
-      const { data: { session } } = await supabase.auth.getSession();
-      const authToken = session?.access_token || supabaseKey;
-
-      console.log('Using auth token:', authToken ? 'present' : 'missing');
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-      try {
-        const response = await fetch(`${supabaseUrl}/rest/v1/recipes`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': supabaseKey,
-            'Authorization': `Bearer ${authToken}`,
-            'Prefer': 'return=representation'
-          },
-          body: JSON.stringify(recipeToInsert),
-          signal: controller.signal
-        });
-
-        clearTimeout(timeoutId);
-        console.log('Response status:', response.status);
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('Error adding recipe:', response.status, errorText);
-          return null;
-        }
-
-        const data = await response.json();
-        const savedRecipe = Array.isArray(data) ? data[0] : data;
-
-        if (savedRecipe) {
-          console.log('Recipe saved successfully:', savedRecipe.id);
-          set((state) => ({ recipes: [savedRecipe, ...state.recipes] }));
-          return savedRecipe;
-        }
-
-        return null;
-      } catch (fetchError: any) {
-        clearTimeout(timeoutId);
-        if (fetchError.name === 'AbortError') {
-          console.error('Request timed out after 15s');
-        } else {
-          console.error('Fetch error:', fetchError.message || fetchError);
-        }
-        return null;
+      if (data) {
+        console.log('Recipe saved successfully:', data.id);
+        set((state) => ({ recipes: [data, ...state.recipes] }));
+        return data;
       }
+
+      return null;
     } catch (error) {
       console.error('Error adding recipe (exception):', error);
       return null;
