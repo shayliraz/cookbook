@@ -1,38 +1,42 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
 export async function POST(request: NextRequest) {
+  console.log('API /recipes called');
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseKey) {
+    console.error('Supabase not configured');
+    return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
+  }
+
   try {
     const body = await request.json();
-    const { recipe, userId, accessToken } = body;
+    const { recipe, userId } = body;
+
+    console.log('Received recipe:', recipe?.title, 'for user:', userId);
 
     if (!recipe || !userId) {
       return NextResponse.json({ error: 'Missing recipe or userId' }, { status: 400 });
     }
 
-    // Create server-side Supabase client
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+    // Create server-side Supabase client with service role key (bypasses RLS)
+    const supabase = createClient(supabaseUrl, supabaseKey, {
       auth: {
         autoRefreshToken: false,
         persistSession: false
       }
     });
 
-    // If we have an access token, set it for RLS
-    if (accessToken) {
-      supabase.auth.setSession({ access_token: accessToken, refresh_token: '' });
-    }
-
-    console.log('Server: Inserting recipe:', recipe.title);
+    console.log('Inserting into database...');
 
     const { data, error } = await supabase
       .from('recipes')
       .insert([{
         user_id: userId,
-        title: recipe.title,
+        title: recipe.title || 'Untitled',
         description: recipe.description || null,
         source_url: recipe.source_url || null,
         image_url: recipe.image_url || null,
@@ -49,15 +53,15 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
-      console.error('Server: Error inserting recipe:', error);
+      console.error('Database error:', error.message, error.code);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    console.log('Server: Recipe saved:', data?.id);
+    console.log('Recipe saved:', data?.id);
     return NextResponse.json({ data });
 
   } catch (error: any) {
-    console.error('Server: Exception:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('Exception:', error.message);
+    return NextResponse.json({ error: error.message || 'Unknown error' }, { status: 500 });
   }
 }
