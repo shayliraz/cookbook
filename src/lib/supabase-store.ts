@@ -133,52 +133,65 @@ export const useSupabaseStore = create<SupabaseStore>((set, get) => ({
 
       console.log('Inserting recipe:', recipeToInsert.title, 'at', new Date().toISOString());
 
-      // Use Promise.race with timeout
-      const timeoutPromise = new Promise<{ error: { message: string } }>((resolve) =>
-        setTimeout(() => resolve({ error: { message: 'Insert timed out after 12s' } }), 12000)
-      );
+      // Use direct fetch API instead of Supabase JS client
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-      const insertPromise = supabase
-        .from('recipes')
-        .insert([recipeToInsert])
-        .then(result => result);
-
-      const { error: insertError } = await Promise.race([insertPromise, timeoutPromise]);
-
-      if (insertError) {
-        console.error('Error adding recipe:', insertError.message || insertError);
+      if (!supabaseUrl || !supabaseKey) {
+        console.error('Supabase URL or key not configured');
         return null;
       }
 
-      console.log('Insert successful at', new Date().toISOString(), '- fetching recipe...');
+      // Get auth token
+      const { data: { session } } = await supabase.auth.getSession();
+      const authToken = session?.access_token || supabaseKey;
 
-      // Small delay to ensure write propagates
-      await new Promise(resolve => setTimeout(resolve, 300));
+      console.log('Using auth token:', authToken ? 'present' : 'missing');
 
-      // Then fetch the newly inserted recipe
-      const { data, error: fetchError } = await supabase
-        .from('recipes')
-        .select('*')
-        .eq('user_id', recipeToInsert.user_id)
-        .eq('title', recipeToInsert.title)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-      if (fetchError) {
-        console.error('Error fetching saved recipe:', fetchError.message);
-        const tempRecipe = { ...recipeToInsert, id: 'temp-' + Date.now(), created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
-        set((state) => ({ recipes: [tempRecipe as any, ...state.recipes] }));
-        return tempRecipe as any;
+      try {
+        const response = await fetch(`${supabaseUrl}/rest/v1/recipes`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': supabaseKey,
+            'Authorization': `Bearer ${authToken}`,
+            'Prefer': 'return=representation'
+          },
+          body: JSON.stringify(recipeToInsert),
+          signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+        console.log('Response status:', response.status);
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Error adding recipe:', response.status, errorText);
+          return null;
+        }
+
+        const data = await response.json();
+        const savedRecipe = Array.isArray(data) ? data[0] : data;
+
+        if (savedRecipe) {
+          console.log('Recipe saved successfully:', savedRecipe.id);
+          set((state) => ({ recipes: [savedRecipe, ...state.recipes] }));
+          return savedRecipe;
+        }
+
+        return null;
+      } catch (fetchError: any) {
+        clearTimeout(timeoutId);
+        if (fetchError.name === 'AbortError') {
+          console.error('Request timed out after 15s');
+        } else {
+          console.error('Fetch error:', fetchError.message || fetchError);
+        }
+        return null;
       }
-
-      if (data) {
-        console.log('Recipe saved successfully:', data.id);
-        set((state) => ({ recipes: [data, ...state.recipes] }));
-        return data;
-      }
-
-      return null;
     } catch (error) {
       console.error('Error adding recipe (exception):', error);
       return null;
