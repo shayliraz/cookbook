@@ -133,22 +133,34 @@ export const useSupabaseStore = create<SupabaseStore>((set, get) => ({
 
       console.log('Inserting recipe:', recipeToInsert.title);
 
-      // Use Promise.race for timeout
-      const timeoutPromise = new Promise<{ data: null; error: Error }>((resolve) =>
-        setTimeout(() => resolve({ data: null, error: new Error('Timeout after 10s') }), 10000)
-      );
-
-      const insertPromise = supabase
+      // First just insert (without select)
+      const { error: insertError } = await supabase
         .from('recipes')
-        .insert([recipeToInsert])
-        .select()
+        .insert([recipeToInsert]);
+
+      if (insertError) {
+        console.error('Error adding recipe:', insertError.message || insertError);
+        return null;
+      }
+
+      console.log('Insert successful, fetching recipe...');
+
+      // Then fetch the newly inserted recipe
+      const { data, error: fetchError } = await supabase
+        .from('recipes')
+        .select('*')
+        .eq('user_id', recipeToInsert.user_id)
+        .eq('title', recipeToInsert.title)
+        .order('created_at', { ascending: false })
+        .limit(1)
         .single();
 
-      const { data, error } = await Promise.race([insertPromise, timeoutPromise]);
-
-      if (error) {
-        console.error('Error adding recipe:', error.message || error);
-        return null;
+      if (fetchError) {
+        console.error('Error fetching saved recipe:', fetchError.message);
+        // Recipe was inserted, just couldn't fetch it - still add to local state
+        const tempRecipe = { ...recipeToInsert, id: 'temp-' + Date.now(), created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+        set((state) => ({ recipes: [tempRecipe as any, ...state.recipes] }));
+        return tempRecipe as any;
       }
 
       if (data) {
