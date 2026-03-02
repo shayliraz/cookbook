@@ -133,8 +133,23 @@ export const useSupabaseStore = create<SupabaseStore>((set, get) => ({
 
       console.log('Inserting recipe:', recipeToInsert.title);
 
-      // Use Supabase JS client with proper array handling
-      const { data, error } = await supabase
+      // Create fresh client to avoid connection issues
+      const { createClient } = await import('@supabase/supabase-js');
+      const freshClient = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+
+      // Get current auth session and set it on fresh client
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        await freshClient.auth.setSession(session);
+      }
+
+      console.log('Using fresh client, session:', session ? 'present' : 'none');
+
+      // Insert with fresh client
+      const { data, error } = await freshClient
         .from('recipes')
         .insert([{
           user_id: recipeToInsert.user_id,
