@@ -289,20 +289,42 @@ export const useSupabaseStore = create<SupabaseStore>((set, get) => ({
   },
 
   createSharedSpace: async (name, description, userId) => {
-    if (!supabase || !userId) return null;
+    if (!userId) return null;
 
-    const { data, error } = await supabase
-      .from('shared_spaces')
-      .insert([{ name, description, owner_id: userId }])
-      .select()
-      .single();
+    try {
+      console.log('Creating space via API:', name);
 
-    if (!error && data) {
-      set((state) => ({ sharedSpaces: [...state.sharedSpaces, data] }));
-      return data;
+      const response = await fetch('/api/spaces', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'createSpace',
+          name,
+          description,
+          userId,
+        }),
+      });
+
+      console.log('Space API response:', response.status);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Error creating space:', errorData.error);
+        return null;
+      }
+
+      const { data } = await response.json();
+
+      if (data) {
+        console.log('Space created:', data.id);
+        set((state) => ({ sharedSpaces: [...state.sharedSpaces, data] }));
+        return data;
+      }
+      return null;
+    } catch (error) {
+      console.error('Exception creating space:', error);
+      return null;
     }
-    console.error('Error creating shared space:', error);
-    return null;
   },
 
   joinSpaceByCode: async (inviteCode, userId) => {
@@ -362,12 +384,33 @@ export const useSupabaseStore = create<SupabaseStore>((set, get) => ({
   },
 
   shareRecipeToSpace: async (recipeId, spaceId, userId) => {
-    if (!supabase) return false;
-    const { error } = await supabase
-      .from('shared_space_recipes')
-      .insert([{ recipe_id: recipeId, space_id: spaceId, shared_by: userId }]);
+    try {
+      console.log('Sharing recipe to space via API');
 
-    return !error;
+      const response = await fetch('/api/spaces', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'shareRecipeToSpace',
+          recipeId,
+          spaceId,
+          userId,
+        }),
+      });
+
+      console.log('Share API response:', response.status);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Error sharing recipe:', errorData.error);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Exception sharing recipe:', error);
+      return false;
+    }
   },
 
   shareRecipeWithUser: async (recipeId, userEmail, canEdit, sharedBy) => {
