@@ -111,68 +111,46 @@ export const useSupabaseStore = create<SupabaseStore>((set, get) => ({
       return null;
     }
     try {
-      // Remove recipe_group if it's null to avoid errors if column doesn't exist
-      const recipeToInsert = { ...recipe };
-      if (recipeToInsert.recipe_group === null || recipeToInsert.recipe_group === undefined) {
-        delete (recipeToInsert as any).recipe_group;
-      }
+      console.log('Inserting recipe via API:', recipe.title);
 
-      // Truncate potentially large fields to avoid timeout
-      if (recipeToInsert.description && recipeToInsert.description.length > 1000) {
-        recipeToInsert.description = recipeToInsert.description.substring(0, 1000);
-      }
-      if (recipeToInsert.image_url && recipeToInsert.image_url.length > 500) {
-        recipeToInsert.image_url = null;
-      }
-      if (recipeToInsert.ingredients && recipeToInsert.ingredients.length > 50) {
-        recipeToInsert.ingredients = recipeToInsert.ingredients.slice(0, 50);
-      }
-      if (recipeToInsert.instructions && recipeToInsert.instructions.length > 50) {
-        recipeToInsert.instructions = recipeToInsert.instructions.slice(0, 50);
-      }
-
-      console.log('Inserting recipe:', recipeToInsert.title);
-
-      // Create fresh client to avoid connection issues
-      const { createClient } = await import('@supabase/supabase-js');
-      const freshClient = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      );
-
-      // Get current auth session and set it on fresh client
+      // Get auth session for the API
       const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        await freshClient.auth.setSession(session);
-      }
 
-      console.log('Using fresh client, session:', session ? 'present' : 'none');
+      // Use server-side API route to avoid client connection issues
+      const response = await fetch('/api/recipes', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          recipe: {
+            title: recipe.title,
+            description: recipe.description || null,
+            source_url: recipe.source_url || null,
+            image_url: recipe.image_url || null,
+            ingredients: recipe.ingredients || [],
+            instructions: recipe.instructions || [],
+            prep_time: recipe.prep_time || null,
+            cook_time: recipe.cook_time || null,
+            servings: recipe.servings || null,
+            cuisine: recipe.cuisine || null,
+            tags: recipe.tags || [],
+            notes: recipe.notes || null,
+          },
+          userId: recipe.user_id,
+          accessToken: session?.access_token,
+        }),
+      });
 
-      // Insert with fresh client
-      const { data, error } = await freshClient
-        .from('recipes')
-        .insert([{
-          user_id: recipeToInsert.user_id,
-          title: recipeToInsert.title,
-          description: recipeToInsert.description || null,
-          source_url: recipeToInsert.source_url || null,
-          image_url: recipeToInsert.image_url || null,
-          ingredients: recipeToInsert.ingredients || [],
-          instructions: recipeToInsert.instructions || [],
-          prep_time: recipeToInsert.prep_time || null,
-          cook_time: recipeToInsert.cook_time || null,
-          servings: recipeToInsert.servings || null,
-          cuisine: recipeToInsert.cuisine || null,
-          tags: recipeToInsert.tags || [],
-          notes: recipeToInsert.notes || null,
-        }])
-        .select()
-        .single();
+      console.log('API response status:', response.status);
 
-      if (error) {
-        console.error('Error adding recipe:', error.message, error.details, error.hint);
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Error adding recipe:', errorData.error);
         return null;
       }
+
+      const { data } = await response.json();
 
       if (data) {
         console.log('Recipe saved successfully:', data.id);
