@@ -106,17 +106,12 @@ export const useSupabaseStore = create<SupabaseStore>((set, get) => ({
   },
 
   addRecipe: async (recipe) => {
-    if (!supabase) {
-      console.error('Supabase not configured');
-      return null;
-    }
     try {
-      console.log('Inserting recipe via API:', recipe.title);
+      console.log('1. Starting addRecipe for:', recipe.title);
 
-      // Get auth session for the API
-      const { data: { session } } = await supabase.auth.getSession();
+      // Use server-side API route
+      console.log('2. Making fetch request to /api/recipes');
 
-      // Use server-side API route to avoid client connection issues
       const response = await fetch('/api/recipes', {
         method: 'POST',
         headers: {
@@ -138,29 +133,28 @@ export const useSupabaseStore = create<SupabaseStore>((set, get) => ({
             notes: recipe.notes || null,
           },
           userId: recipe.user_id,
-          accessToken: session?.access_token,
         }),
       });
 
-      console.log('API response status:', response.status);
+      console.log('3. Got response:', response.status);
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.error('Error adding recipe:', errorData.error);
+        console.error('4. Error response:', errorData.error);
         return null;
       }
 
       const { data } = await response.json();
 
       if (data) {
-        console.log('Recipe saved successfully:', data.id);
+        console.log('5. Recipe saved:', data.id);
         set((state) => ({ recipes: [data, ...state.recipes] }));
         return data;
       }
 
       return null;
     } catch (error) {
-      console.error('Error adding recipe (exception):', error);
+      console.error('Exception in addRecipe:', error);
       return null;
     }
   },
