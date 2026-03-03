@@ -343,14 +343,37 @@ export const useSupabaseStore = create<SupabaseStore>((set, get) => ({
       return false;
     }
 
-    // Join the space
+    // Check if already a member
+    const { data: existingMember } = await supabase
+      .from('shared_space_members')
+      .select('id')
+      .eq('space_id', space.id)
+      .eq('user_id', userId)
+      .single();
+
+    if (existingMember) {
+      // Already a member, just add to local state if not there
+      const state = get();
+      if (!state.sharedSpaces.find(s => s.id === space.id)) {
+        set((state) => ({
+          sharedSpaces: [...state.sharedSpaces, space],
+        }));
+      }
+      return true;
+    }
+
+    // Join the space (use upsert to handle edge cases)
     const { error } = await supabase
       .from('shared_space_members')
-      .insert([{ space_id: space.id, user_id: userId }]);
+      .upsert([{ space_id: space.id, user_id: userId, role: 'member' }], {
+        onConflict: 'space_id,user_id',
+      });
 
     if (!error) {
-      set((state) => ({ 
-        sharedSpaces: [...state.sharedSpaces, space],
+      set((state) => ({
+        sharedSpaces: state.sharedSpaces.find(s => s.id === space.id)
+          ? state.sharedSpaces
+          : [...state.sharedSpaces, space],
         sharedSpaceMembers: [...state.sharedSpaceMembers, {
           id: '', // Will be set by DB
           space_id: space.id,
