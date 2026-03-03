@@ -75,11 +75,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signUp = async (email: string, password: string, displayName?: string) => {
     if (!supabase) return { error: new Error('Supabase not configured') };
 
+    // Use the current origin for email redirect (works for both localhost and production)
+    const redirectTo = typeof window !== 'undefined' ? window.location.origin : undefined;
+
     const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: { full_name: displayName },
+        emailRedirectTo: redirectTo,
       },
     });
     return { error };
