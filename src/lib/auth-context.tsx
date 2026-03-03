@@ -109,11 +109,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     if (supabase) {
-      await supabase.auth.signOut();
+      // Use global scope to sign out from all tabs/windows
+      const { error } = await supabase.auth.signOut({ scope: 'global' });
+      if (error) {
+        console.error('Sign out error:', error);
+      }
     }
+    // Clear state immediately
     setUser(null);
     setProfile(null);
     setSession(null);
+
+    // Force a page reload to clear any cached state
+    if (typeof window !== 'undefined') {
+      window.location.href = '/';
+    }
   };
 
   const updateProfile = async (updates: Partial<DBProfile>) => {
