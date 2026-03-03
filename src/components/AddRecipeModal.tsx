@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Modal, Button, Input } from './ui';
 import { useCookingStore } from '@/lib/store';
 import { useSupabaseStore } from '@/lib/supabase-store';
 import { useAuth } from '@/lib/auth-context';
 import { ScrapedRecipe } from '@/types';
 import { Link, Loader2, Plus, X, Sparkles } from 'lucide-react';
+import { GroupSelect } from './GroupSelect';
 
 interface AddRecipeModalProps {
   isOpen: boolean;
@@ -35,8 +36,18 @@ export function AddRecipeModal({ isOpen, onClose }: AddRecipeModalProps) {
 
   // Auth and stores
   const { user } = useAuth();
-  const localAddRecipe = useCookingStore((state) => state.addRecipe);
-  const { addRecipe: supabaseAddRecipe, initialized: supabaseInitialized } = useSupabaseStore();
+  const localStore = useCookingStore();
+  const localAddRecipe = localStore.addRecipe;
+  const { addRecipe: supabaseAddRecipe, initialized: supabaseInitialized, recipes: supabaseRecipes } = useSupabaseStore();
+
+  // Get existing groups from recipes
+  const existingGroups = useMemo(() => {
+    const recipes = user && supabaseInitialized ? supabaseRecipes : localStore.recipes;
+    const groups = recipes
+      .map((r: any) => r.recipe_group)
+      .filter((g: any): g is string => g !== null && g !== undefined && g.trim() !== '');
+    return [...new Set(groups)].sort();
+  }, [user, supabaseInitialized, supabaseRecipes, localStore.recipes]);
 
   const handleScrape = async () => {
     if (!url) return;
@@ -283,12 +294,17 @@ export function AddRecipeModal({ isOpen, onClose }: AddRecipeModalProps) {
               />
             </div>
 
-            <Input
-              label="Recipe Group (optional)"
-              value={recipeGroup}
-              onChange={(e) => setRecipeGroup(e.target.value)}
-              placeholder="e.g., Weeknight Dinners, Holiday Baking"
-            />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Recipe Group (optional)
+              </label>
+              <GroupSelect
+                value={recipeGroup}
+                onChange={setRecipeGroup}
+                existingGroups={existingGroups}
+                placeholder="Select or create a group"
+              />
+            </div>
 
             {/* Ingredients */}
             <div>

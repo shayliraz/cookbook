@@ -4,15 +4,17 @@ import { useState, useEffect } from 'react';
 import { X, Plus, Trash2, Loader2 } from 'lucide-react';
 import { Button, Card } from '@/components/ui';
 import { RecipeWithLogs } from '@/types';
+import { GroupSelect } from './GroupSelect';
 
 interface EditRecipeModalProps {
   isOpen: boolean;
   onClose: () => void;
   recipe: RecipeWithLogs;
   onSave: (updates: Partial<RecipeWithLogs>) => Promise<void>;
+  existingGroups?: string[];
 }
 
-export function EditRecipeModal({ isOpen, onClose, recipe, onSave }: EditRecipeModalProps) {
+export function EditRecipeModal({ isOpen, onClose, recipe, onSave, existingGroups = [] }: EditRecipeModalProps) {
   const [title, setTitle] = useState(recipe.title);
   const [description, setDescription] = useState(recipe.description || '');
   const [ingredients, setIngredients] = useState<string[]>(recipe.ingredients);
@@ -205,12 +207,11 @@ export function EditRecipeModal({ isOpen, onClose, recipe, onSave }: EditRecipeM
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Recipe Group (optional)
             </label>
-            <input
-              type="text"
+            <GroupSelect
               value={recipeGroup}
-              onChange={(e) => setRecipeGroup(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-              placeholder="e.g., Weeknight Dinners, Holiday Baking"
+              onChange={setRecipeGroup}
+              existingGroups={existingGroups}
+              placeholder="Select or create a group"
             />
             <p className="mt-1 text-xs text-gray-500">
               Group recipes together for easier organization

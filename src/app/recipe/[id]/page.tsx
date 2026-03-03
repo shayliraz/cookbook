@@ -23,7 +23,7 @@ import {
   Star,
   Edit3,
 } from 'lucide-react';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { format } from 'date-fns';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -48,6 +48,15 @@ export default function RecipePage() {
   const { user } = useAuth();
   const localStore = useCookingStore();
   const supabaseStore = useSupabaseStore();
+
+  // Get existing groups from recipes for the group selector
+  const existingGroups = useMemo(() => {
+    const recipes = user && supabaseStore.initialized ? supabaseStore.recipes : localStore.recipes;
+    const groups = recipes
+      .map((r: any) => r.recipe_group)
+      .filter((g: any): g is string => g !== null && g !== undefined && g.trim() !== '');
+    return [...new Set(groups)].sort();
+  }, [user, supabaseStore.initialized, supabaseStore.recipes, localStore.recipes]);
 
   // Use appropriate store based on auth state
   const getRecipeWithLogs = user && supabaseStore.initialized
@@ -586,6 +595,7 @@ export default function RecipePage() {
         onSave={async (updates) => {
           await updateRecipe(recipe.id, updates);
         }}
+        existingGroups={existingGroups}
       />
 
       {/* Share Recipe Modal */}

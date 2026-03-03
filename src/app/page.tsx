@@ -8,6 +8,7 @@ import { RecipeCard } from '@/components/RecipeCard';
 import { RecipeListItem } from '@/components/RecipeListItem';
 import { AddRecipeModal } from '@/components/AddRecipeModal';
 import { AuthModal } from '@/components/auth/AuthModal';
+import { InstallPWAButton } from '@/components/InstallPWAButton';
 import { Button, Input } from '@/components/ui';
 import { Plus, Search, ChefHat, Sparkles, Filter, X, User, LogOut, Users, Loader2, Grid3X3, List, FolderOpen } from 'lucide-react';
 import Link from 'next/link';
@@ -190,6 +191,7 @@ export default function Home() {
             </div>
 
             <div className="flex items-center gap-2">
+              <InstallPWAButton />
               <Link href="/discover">
                 <Button variant="ghost" size="sm">
                   <Sparkles className="w-4 h-4 mr-1" />
