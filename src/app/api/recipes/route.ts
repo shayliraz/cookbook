@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { recipe, userId } = body;
+    const { recipe, userId, userEmail } = body;
 
     console.log('Received recipe:', recipe?.title, 'for user:', userId);
 
@@ -30,21 +30,47 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    // Ensure user profile exists (upsert to handle missing profiles)
-    console.log('Ensuring profile exists for user:', userId);
-    const { error: profileError } = await supabase
+    // Ensure user profile exists - first check if it exists
+    console.log('Checking if profile exists for user:', userId);
+    const { data: existingProfile } = await supabase
       .from('profiles')
-      .upsert(
-        { id: userId, updated_at: new Date().toISOString() },
-        { onConflict: 'id', ignoreDuplicates: true }
-      );
+      .select('id')
+      .eq('id', userId)
+      .single();
 
-    if (profileError) {
-      console.error('Profile upsert error:', profileError.message);
-      // Continue anyway - the profile might already exist
+    if (!existingProfile) {
+      console.log('Profile does not exist, creating one...');
+
+      // Get the user's email from auth if not provided
+      let email = userEmail;
+      if (!email) {
+        const { data: authUser } = await supabase.auth.admin.getUserById(userId);
+        email = authUser?.user?.email || `user_${userId.substring(0, 8)}@placeholder.com`;
+      }
+
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert({
+          id: userId,
+          email: email,
+          display_name: email.split('@')[0],
+          updated_at: new Date().toISOString()
+        });
+
+      if (profileError) {
+        console.error('Profile creation error:', profileError.message);
+        // If it's a duplicate key error, the profile was created by another request - continue
+        if (!profileError.message.includes('duplicate')) {
+          return NextResponse.json({ error: 'Failed to create user profile: ' + profileError.message }, { status: 500 });
+        }
+      } else {
+        console.log('Profile created successfully');
+      }
+    } else {
+      console.log('Profile already exists');
     }
 
-    console.log('Inserting into database...');
+    console.log('Inserting recipe into database...');
 
     const { data, error } = await supabase
       .from('recipes')

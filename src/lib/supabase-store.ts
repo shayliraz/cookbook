@@ -131,8 +131,10 @@ export const useSupabaseStore = create<SupabaseStore>((set, get) => ({
             cuisine: recipe.cuisine || null,
             tags: recipe.tags || [],
             notes: recipe.notes || null,
+            recipe_group: recipe.recipe_group || null,
           },
           userId: recipe.user_id,
+          userEmail: (recipe as any).user_email || null,
         }),
       });
 
