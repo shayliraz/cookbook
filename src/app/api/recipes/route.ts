@@ -30,6 +30,20 @@ export async function POST(request: NextRequest) {
       }
     });
 
+    // Ensure user profile exists (upsert to handle missing profiles)
+    console.log('Ensuring profile exists for user:', userId);
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .upsert(
+        { id: userId, updated_at: new Date().toISOString() },
+        { onConflict: 'id', ignoreDuplicates: true }
+      );
+
+    if (profileError) {
+      console.error('Profile upsert error:', profileError.message);
+      // Continue anyway - the profile might already exist
+    }
+
     console.log('Inserting into database...');
 
     const { data, error } = await supabase
@@ -48,6 +62,7 @@ export async function POST(request: NextRequest) {
         cuisine: recipe.cuisine || null,
         tags: recipe.tags || [],
         notes: recipe.notes || null,
+        recipe_group: recipe.recipe_group || null,
       }])
       .select()
       .single();
