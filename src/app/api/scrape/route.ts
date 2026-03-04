@@ -783,6 +783,9 @@ function extractHashulchan($: cheerio.CheerioAPI, baseUrl: string): ScrapedRecip
 // Smart Fallback Extraction
 // ============================================
 function smartFallbackExtraction($: cheerio.CheerioAPI, url: string, baseUrl: string): ScrapedRecipe {
+  // Remove noisy elements that are definitely not recipe content
+  removeNoiseElements($);
+
   // Try multiple title patterns
   const title = findTitle($);
   const description = $('meta[name="description"]').attr('content') ||
@@ -813,6 +816,49 @@ function smartFallbackExtraction($: cheerio.CheerioAPI, url: string, baseUrl: st
     nutrition: null,
     confidence: ingredients.length > 2 && instructions.length > 1 ? 'medium' : 'low',
   };
+}
+
+/**
+ * Remove elements that are clearly not recipe content
+ */
+function removeNoiseElements($: cheerio.CheerioAPI): void {
+  // Common noise selectors - comments, ads, social, navigation, etc.
+  const noiseSelectors = [
+    // Comments
+    '#comments', '.comments', '.comment-section', '.comment-list',
+    '#respond', '.respond', '#reply', '.replies',
+    '.talkback', '.talkbacks', '#talkback', '.comment-form',
+    '.fb-comments', '.disqus', '#disqus_thread',
+    // Hebrew comment patterns
+    '.תגובות', '#תגובות', '.טוקבק', '.טוקבקים',
+    // Social/sharing
+    '.social-share', '.share-buttons', '.sharing', '.social-buttons',
+    '.addthis', '.sharethis',
+    // Ads
+    '.advertisement', '.ad-container', '.ads', '.ad-wrapper',
+    '[class*="advert"]', '[id*="advert"]',
+    // Navigation
+    'nav', '.navigation', '.nav-menu', '.breadcrumb', '.breadcrumbs',
+    // Related content
+    '.related-posts', '.related-recipes', '.also-like', '.you-may-like',
+    '.recommended', '.suggestions',
+    // Sidebar
+    'aside', '.sidebar', '#sidebar', '.widget-area',
+    // Footer
+    'footer', '.footer', '#footer', '.site-footer',
+    // Newsletter
+    '.newsletter', '.subscribe-form', '.email-signup',
+    // Author bio (not the author name, but long bio sections)
+    '.author-bio', '.author-box', '.about-author',
+    // Ratings/reviews from users
+    '.user-reviews', '.user-ratings', '.reviews-section',
+    // Print/utility buttons
+    '.print-button', '.utility-buttons',
+  ];
+
+  noiseSelectors.forEach(selector => {
+    $(selector).remove();
+  });
 }
 
 function findTitle($: cheerio.CheerioAPI): string {
@@ -847,6 +893,11 @@ function findIngredients($: cheerio.CheerioAPI): string[] {
     '[class*="ingredient"]',
     '.wprm-recipe-ingredients',
     '.tasty-recipes-ingredients',
+    // Hebrew patterns
+    '.מרכיבים',
+    '.חומרים',
+    '[class*="מרכיב"]',
+    '[class*="חומר"]',
   ];
 
   for (const selector of containerSelectors) {
@@ -863,8 +914,8 @@ function findIngredients($: cheerio.CheerioAPI): string[] {
     }
   }
 
-  // Fallback: look for lists near "ingredient" text
-  $('*:contains("ngredient")').each((_, el) => {
+  // Fallback: look for lists near "ingredient" text (English and Hebrew)
+  $('*:contains("ngredient"), *:contains("מרכיבים"), *:contains("חומרים")').each((_, el) => {
     const $el = $(el);
     const $list = $el.next('ul, ol').length ? $el.next('ul, ol') : $el.find('ul, ol').first();
 
@@ -878,8 +929,36 @@ function findIngredients($: cheerio.CheerioAPI): string[] {
     }
   });
 
-  // Deduplicate
-  return [...new Set(ingredients)];
+  // Additional fallback: look for any unordered list where most items look like ingredients
+  if (ingredients.length < 3) {
+    $('ul').each((_, ul) => {
+      const $ul = $(ul);
+      const items: string[] = [];
+      let ingredientLikeCount = 0;
+
+      $ul.find('li').each((_, li) => {
+        const text = cleanIngredientText($(li).text());
+        if (text) {
+          items.push(text);
+          if (isLikelyIngredient(text)) {
+            ingredientLikeCount++;
+          }
+        }
+      });
+
+      // If more than 60% look like ingredients, use this list
+      if (items.length >= 3 && ingredientLikeCount / items.length > 0.6) {
+        items.forEach(item => {
+          if (isLikelyIngredient(item) && !ingredients.includes(item)) {
+            ingredients.push(item);
+          }
+        });
+      }
+    });
+  }
+
+  // Deduplicate and limit
+  return [...new Set(ingredients)].slice(0, 50);
 }
 
 function findInstructions($: cheerio.CheerioAPI): string[] {
@@ -896,6 +975,10 @@ function findInstructions($: cheerio.CheerioAPI): string[] {
     '[class*="direction"]',
     '.wprm-recipe-instructions',
     '.tasty-recipes-instructions',
+    // Hebrew patterns
+    '.הוראות-הכנה',
+    '.אופן-הכנה',
+    '[class*="הכנה"]',
   ];
 
   for (const selector of containerSelectors) {
@@ -904,7 +987,7 @@ function findInstructions($: cheerio.CheerioAPI): string[] {
       // Try list items first
       container.find('li').each((_, el) => {
         const text = cleanInstructionText($(el).text());
-        if (text && text.length > 15) {
+        if (text && isLikelyInstruction(text)) {
           instructions.push(text);
         }
       });
@@ -913,7 +996,7 @@ function findInstructions($: cheerio.CheerioAPI): string[] {
       if (instructions.length === 0) {
         container.find('p').each((_, el) => {
           const text = cleanInstructionText($(el).text());
-          if (text && text.length > 20) {
+          if (text && isLikelyInstruction(text)) {
             instructions.push(text);
           }
         });
@@ -923,13 +1006,36 @@ function findInstructions($: cheerio.CheerioAPI): string[] {
     }
   }
 
-  // Fallback: look for ordered lists with longer text
+  // Fallback: look for ordered lists with longer text that look like instructions
   $('ol li').each((_, el) => {
     const text = cleanInstructionText($(el).text());
-    if (text && text.length > 30 && instructions.length < 20) {
+    if (text && isLikelyInstruction(text) && instructions.length < 20) {
       instructions.push(text);
     }
   });
+
+  // If still no instructions, try paragraphs near "instruction" or "method" text
+  if (instructions.length === 0) {
+    $('*:contains("nstruction"), *:contains("ethod"), *:contains("הכנה"), *:contains("הוראות")').each((_, el) => {
+      const $el = $(el);
+      // Look for nearby paragraphs or list
+      const $content = $el.next('ol, ul, p').length ? $el.next('ol, ul, p') : $el.find('ol, ul, p').first();
+
+      if ($content.is('ol, ul')) {
+        $content.find('li').each((_, li) => {
+          const text = cleanInstructionText($(li).text());
+          if (text && isLikelyInstruction(text)) {
+            instructions.push(text);
+          }
+        });
+      } else if ($content.is('p')) {
+        const text = cleanInstructionText($content.text());
+        if (text && isLikelyInstruction(text)) {
+          instructions.push(text);
+        }
+      }
+    });
+  }
 
   return [...new Set(instructions)];
 }
@@ -1207,15 +1313,88 @@ function isLikelyIngredient(text: string): boolean {
   // Too short or too long
   if (text.length < 2 || text.length > 200) return false;
 
-  // Contains common ingredient patterns
+  // Blacklist patterns - things that are definitely NOT ingredients
+  const blacklistPatterns = [
+    // Comments/social patterns
+    /reply|תגובה|השב|comment|like|share|שתף|follow|עקוב/i,
+    /\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}/, // Dates
+    /\d{1,2}:\d{2}/, // Times
+    /@\w+/, // Mentions
+    /https?:\/\//, // URLs
+    /^\d+\s*(likes?|comments?|shares?|views?)/i,
+    /ago|לפני|ימים|שעות|דקות/i, // "X time ago"
+    /logged in|login|sign up|הרשמ|התחבר/i,
+    /subscribe|newsletter|הרשם לניוזלטר/i,
+    /advertisement|פרסומת|מודעה/i,
+    /rating|דירוג|stars?|כוכבים/i,
+    /print|הדפס|save|שמור/i,
+    /facebook|twitter|instagram|pinterest|whatsapp/i,
+    /copyright|©|כל הזכויות/i,
+    /read more|קרא עוד|המשך/i,
+    /related|קשור|דומה|גם יעניין/i,
+    /author|מחבר|נכתב על ידי/i,
+    /category|קטגוריה/i,
+    /^\s*[\u0590-\u05FF\w]+\s+אמר/i, // "X said" pattern in Hebrew
+    /wrote:|כתב:|said:/i,
+  ];
+
+  if (blacklistPatterns.some(p => p.test(text))) return false;
+
+  // If text has multiple sentences, probably not an ingredient
+  if ((text.match(/[.!?]/g) || []).length > 1) return false;
+
+  // Contains common ingredient patterns (whitelist)
   const ingredientPatterns = [
     /\d+\s*(cup|tbsp|tsp|oz|g|kg|ml|l|lb|pound|tablespoon|teaspoon)/i,
     /\d+\/\d+/,
-    /½|⅓|¼|⅔|¾/,
-    /כף|כפית|כוס|גרם|ק"ג|מ"ל/,
+    /½|⅓|¼|⅔|¾|⅛/,
+    /כף|כפית|כוס|גרם|ק"ג|מ"ל|ליטר|יחידות?|חבילה|שקית/,
+    /\d+\s*(small|medium|large|קטנ|בינונ|גדול)/i,
+    /pinch|dash|קמצוץ|מעט/i,
   ];
 
-  return ingredientPatterns.some(p => p.test(text)) || text.split(' ').length <= 10;
+  // Has ingredient pattern = definitely an ingredient
+  if (ingredientPatterns.some(p => p.test(text))) return true;
+
+  // Short text with few words is likely an ingredient
+  const wordCount = text.split(/\s+/).length;
+  return wordCount <= 8 && !text.includes('?');
+}
+
+function isLikelyInstruction(text: string): boolean {
+  // Too short
+  if (text.length < 15) return false;
+
+  // Blacklist patterns
+  const blacklistPatterns = [
+    /reply|תגובה|השב|comment/i,
+    /\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}/, // Dates
+    /@\w+/, // Mentions
+    /https?:\/\//, // URLs
+    /ago|לפני\s+\d+/i,
+    /logged in|login|sign up|הרשמ|התחבר/i,
+    /subscribe|newsletter/i,
+    /advertisement|פרסומת/i,
+    /facebook|twitter|instagram|pinterest/i,
+    /copyright|©/i,
+    /^\s*[\u0590-\u05FF\w]+\s+אמר/i, // "X said"
+    /wrote:|כתב:|said:/i,
+    /thank you|תודה|thanks/i,
+    /great recipe|מתכון מעולה|delicious|טעים/i, // Comments about recipe
+    /tried this|ניסיתי|made this|הכנתי/i,
+    /question|שאלה|\?$/i,
+  ];
+
+  if (blacklistPatterns.some(p => p.test(text))) return false;
+
+  // Contains cooking action verbs (whitelist hints)
+  const cookingVerbs = [
+    /mix|stir|bake|cook|fry|boil|simmer|chop|slice|dice|pour|add|combine|fold|whisk|beat|knead|roll|spread|season|marinate|preheat|heat|cool|chill|freeze|serve|garnish|drizzle|sprinkle/i,
+    /ערבב|בחש|אפה|בשל|טגן|הרתח|קצץ|חתוך|פרוס|הוסף|שפוך|מזג|לש|רדד|מרח|תיבל|חמם|צנן|קרר|הגש|קשט|זלף|פזר/,
+  ];
+
+  // If has cooking verbs, more likely to be instruction
+  return cookingVerbs.some(p => p.test(text)) || text.length > 30;
 }
 
 function parseDuration(duration: unknown): number | null {
